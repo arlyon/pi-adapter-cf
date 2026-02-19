@@ -1,0 +1,46 @@
+{
+  "name": "pi-agent-cf",
+  "version": "0.1.0",
+  "description": "Deploy pi-mono AI agents on Cloudflare Workers with Durable Objects. Dependency-injection friendly SDK.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "wrangler dev example/src/index.ts --config example/wrangler.toml",
+    "deploy:example": "wrangler deploy --config example/wrangler.toml",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "durable-objects",
+    "ai-agent",
+    "pi-mono",
+    "llm",
+    "websocket"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.53.0",
+    "@mariozechner/pi-ai": "^0.53.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^3.109.0"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": ">=4.0.0"
+  }
+}

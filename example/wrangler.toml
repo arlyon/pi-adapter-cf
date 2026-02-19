@@ -1,0 +1,22 @@
+name = "pi-agent-example"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[durable_objects]
+bindings = [
+  { name = "AGENT_SESSION", class_name = "AgentSessionDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["AgentSessionDO"]
+
+# Uncomment and add a KV namespace if your tools need it:
+# [[kv_namespaces]]
+# binding = "MY_KV"
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Set secrets via:  wrangler secret put ANTHROPIC_API_KEY
+#                   wrangler secret put OPENAI_API_KEY
+#                   wrangler secret put GOOGLE_API_KEY
