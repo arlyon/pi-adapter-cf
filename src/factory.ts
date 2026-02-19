@@ -7,7 +7,7 @@
  *
  * Usage:
  * ```ts
- * import { createAgentWorker } from 'pi-agent-cf';
+ * import { createAgentWorker } from '@funtuantw/pi-agent-cf';
  *
  * const worker = createAgentWorker({
  *   systemPrompt: 'You are a helpful assistant.',

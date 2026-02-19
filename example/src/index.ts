@@ -13,7 +13,7 @@
  *   2. WS   /sessions/:id/ws → send { type: "prompt", text: "Hello!" }
  */
 
-import { createAgentWorker, type AgentEnv, type AgentTool } from "../../src/index.js";
+import { createAgentWorker, getModel, type AgentEnv, type AgentTool } from "../../src/index.js";
 import { Type, type Static } from "@sinclair/typebox";
 
 // ---------------------------------------------------------------------------
@@ -70,13 +70,59 @@ const Calculate: AgentTool<typeof CalculateSchema> = {
 };
 
 function safeEval(expr: string): number {
-  // Very basic arithmetic: supports +, -, *, /, parentheses, decimals
-  const sanitised = expr.replace(/[^0-9+\-*/().  ]/g, "");
-  if (sanitised !== expr.trim()) {
+  // Recursive descent parser — no eval() / new Function() needed (CF Workers safe)
+  const src = expr.replace(/\s+/g, "");
+  if (!/^[0-9+\-*/().]+$/.test(src)) {
     throw new Error("Expression contains invalid characters");
   }
-  // Use Function constructor for simple math (runs in V8 isolate — safe in Workers)
-  return new Function(`"use strict"; return (${sanitised});`)() as number;
+  let pos = 0;
+
+  function parseExpr(): number {
+    let left = parseTerm();
+    while (pos < src.length && (src[pos] === "+" || src[pos] === "-")) {
+      const op = src[pos++];
+      const right = parseTerm();
+      left = op === "+" ? left + right : left - right;
+    }
+    return left;
+  }
+
+  function parseTerm(): number {
+    let left = parseFactor();
+    while (pos < src.length && (src[pos] === "*" || src[pos] === "/")) {
+      const op = src[pos++];
+      const right = parseFactor();
+      if (op === "/") {
+        if (right === 0) throw new Error("Division by zero");
+        left = left / right;
+      } else {
+        left = left * right;
+      }
+    }
+    return left;
+  }
+
+  function parseFactor(): number {
+    if (src[pos] === "(") {
+      pos++; // skip "("
+      const val = parseExpr();
+      if (src[pos] !== ")") throw new Error("Missing closing parenthesis");
+      pos++; // skip ")"
+      return val;
+    }
+    if (src[pos] === "-") {
+      pos++;
+      return -parseFactor();
+    }
+    const start = pos;
+    while (pos < src.length && /[0-9.]/.test(src[pos])) pos++;
+    if (pos === start) throw new Error(`Unexpected character: ${src[pos]}`);
+    return parseFloat(src.slice(start, pos));
+  }
+
+  const result = parseExpr();
+  if (pos !== src.length) throw new Error(`Unexpected character: ${src[pos]}`);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +130,8 @@ function safeEval(expr: string): number {
 // ---------------------------------------------------------------------------
 
 const worker = createAgentWorker<Env>({
+  model: getModel("google", "gemini-3-flash-preview"),
+
   systemPrompt: `You are a helpful AI assistant running on Cloudflare Workers.
 You have access to tools for getting the current time and doing calculations.
 Be concise and helpful.`,

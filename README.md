@@ -1,4 +1,4 @@
-# pi-agent-cf
+# @funtuantw/pi-agent-cf
 
 Deploy [pi-mono](https://github.com/badlogic/pi-mono) AI agents on **Cloudflare Workers** with **Durable Objects**.
 
@@ -18,14 +18,14 @@ Dependency-injection friendly SDK — inject your own tools, LLM providers, API 
 ### 1. Install
 
 ```bash
-npm install pi-agent-cf @mariozechner/pi-agent-core @mariozechner/pi-ai
+npm install @funtuantw/pi-agent-cf @mariozechner/pi-agent-core @mariozechner/pi-ai
 ```
 
 ### 2. Create your worker
 
 ```typescript
 // src/index.ts
-import { createAgentWorker, type AgentEnv, type AgentTool } from 'pi-agent-cf';
+import { createAgentWorker, type AgentEnv, type AgentTool } from '@funtuantw/pi-agent-cf';
 import { Type } from '@sinclair/typebox';
 
 interface Env extends AgentEnv {
@@ -73,6 +73,11 @@ bindings = [
 [[migrations]]
 tag = "v1"
 new_classes = ["AgentSessionDO"]
+
+# Required: AJV uses new Function() which is forbidden in CF Workers.
+# This stub disables schema validation; pi-ai falls back to trusting LLM output.
+[alias]
+"ajv" = "node_modules/@funtuantw/pi-agent-cf/stubs/ajv.js"
 ```
 
 ### 4. Set secrets & deploy
@@ -166,6 +171,10 @@ AgentSession DO (one per session)
   - Cleans up in-memory resources after idle timeout via alarm
 
 ## Compatibility
+
+> **Important:** `pi-ai` depends on AJV for JSON-schema validation, which uses `new Function()` internally — forbidden in Cloudflare Workers. The SDK ships a stub at `stubs/ajv.js` that disables AJV so `pi-ai` falls back to trusting the LLM output directly. **You must add the `[alias]` section to your `wrangler.toml`** (see step 3 above).
+>
+> Also, if you use `undici` >= 7 (pulled by `pi-ai`), add `"undici": "^6.21.0"` to your `overrides` in `package.json` to avoid `node:sqlite` bundling issues.
 
 The SDK uses only `pi-agent-core` (zero Node.js deps) and `pi-ai` (uses `fetch()` for LLM calls). The following providers work out of the box on CF Workers:
 

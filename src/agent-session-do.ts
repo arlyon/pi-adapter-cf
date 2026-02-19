@@ -149,6 +149,42 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
       await saveMessages(this._ctx.storage, this._agent.state.messages, MAX_PERSISTED);
     }
 
+    /**
+     * If the in-memory agent has no messages but storage has history,
+     * recreate the agent seeded with the persisted messages.
+     * Called before reading state so callers always see the full history
+     * even after the DO hibernated.
+     */
+    /** @internal */
+    async _hydrateFromStorageIfNeeded(): Promise<void> {
+      const agent = this._ensureAgent();
+      if (agent.state.messages.length > 0) return; // already hydrated
+      const persisted = await loadMessages(this._ctx.storage);
+      if (persisted.length === 0) return;
+      // Destroy current (empty) agent and recreate with persisted messages
+      this._destroyAgent();
+      const env = this._env;
+      const systemPrompt =
+        typeof config.systemPrompt === "function"
+          ? config.systemPrompt(env)
+          : config.systemPrompt;
+      const tools: AgentTool<any>[] = config.tools ? config.tools(env) : [];
+      this._agent = new Agent({
+        initialState: {
+          systemPrompt,
+          tools,
+          messages: persisted,
+          ...(config.model ? { model: config.model } : {}),
+          ...(config.thinkingLevel ? { thinkingLevel: config.thinkingLevel } : {}),
+        },
+        streamFn: config.streamFn,
+        transformContext: config.transformContext,
+        convertToLlm: config.convertToLlm,
+        getApiKey: (provider) => config.getApiKey(provider, env),
+        sessionId: this._sessionId,
+      });
+    }
+
     // -----------------------------------------------------------------
     // WebSocket broadcast
     // -----------------------------------------------------------------
@@ -225,6 +261,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
 
       // REST: GET /state
       if (request.method === "GET" && url.pathname.endsWith("/state")) {
+        await this._hydrateFromStorageIfNeeded();
         const state = this._getSerializableState();
         return Response.json(state);
       }

@@ -1,7 +1,12 @@
 name = "pi-agent-example"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat_v2"]
+
+# AJV uses new Function() which is forbidden in CF Workers.
+# This stub disables AJV; pi-ai falls back to trusting LLM output.
+[alias]
+"ajv" = "../stubs/ajv.js"
 
 [durable_objects]
 bindings = [

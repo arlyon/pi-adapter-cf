@@ -11,7 +11,7 @@
  *   type AgentEnv,
  *   type ClientMessage,
  *   type ServerMessage,
- * } from 'pi-agent-cf';
+ * } from '@funtuantw/pi-agent-cf';
  * ```
  */
 

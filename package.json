@@ -1,5 +1,5 @@
 {
-  "name": "pi-agent-cf",
+  "name": "@funtuantw/pi-agent-cf",
   "version": "0.1.0",
   "description": "Deploy pi-mono AI agents on Cloudflare Workers with Durable Objects. Dependency-injection friendly SDK.",
   "type": "module",
@@ -9,10 +9,12 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./stubs/ajv": "./stubs/ajv.js"
   },
   "files": [
     "dist",
+    "stubs",
     "README.md"
   ],
   "scripts": {
@@ -31,6 +33,14 @@
     "websocket"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/funtuan/pi-agent-cf.git"
+  },
+  "homepage": "https://github.com/funtuan/pi-agent-cf#readme",
+  "bugs": {
+    "url": "https://github.com/funtuan/pi-agent-cf/issues"
+  },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.53.0",
     "@mariozechner/pi-ai": "^0.53.0"
@@ -42,5 +52,8 @@
   },
   "peerDependencies": {
     "@cloudflare/workers-types": ">=4.0.0"
+  },
+  "overrides": {
+    "undici": "^6.21.0"
   }
 }
