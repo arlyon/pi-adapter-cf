@@ -202,10 +202,11 @@
           case 'tool_execution_start':
             addMsg('tool', `🔧 ${evt.toolName}(${JSON.stringify(evt.args)})`);
             break;
-          case 'tool_execution_end':
+          case 'tool_execution_end': {
             const text = evt.result?.content?.map(c => c.text || '').join('') || '';
             addMsg('tool', `✅ ${evt.toolName} → ${text}`);
             break;
+          }
           case 'agent_end':
             sendBtn.disabled = false;
             break;
@@ -224,7 +225,7 @@
       inputEl.value = '';
     }
 
-    function abort() {
+    function _abort() {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'abort' }));
       }

@@ -13,9 +13,11 @@
  */
 
 class Ajv {
-  constructor() {
-    throw new Error("AJV disabled in Cloudflare Workers (no eval/new Function support)");
-  }
+	constructor() {
+		throw new Error(
+			"AJV disabled in Cloudflare Workers (no eval/new Function support)",
+		);
+	}
 }
 
 export default Ajv;
