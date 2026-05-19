@@ -1,5 +1,9 @@
 /**
- * pi-agent-cf — Session persistence via Durable Object storage
+ * pi-adapter-cf — Legacy flat session persistence
+ *
+ * @deprecated Use DOSessionStorage + Session from pi-agent-core instead.
+ * This module is kept for backwards compatibility with existing DO storage
+ * that was written in the old format. New sessions use the session tree.
  *
  * Stores agent messages in DO transactional storage, splitting large
  * conversations into chunks to stay within the 128 KiB per-key limit.
