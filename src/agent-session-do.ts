@@ -1,24 +1,25 @@
 /**
- * pi-agent-cf — AgentSession Durable Object
+ * pi-adapter-cf — AgentSession Durable Object
  *
  * Each instance manages ONE agent session:
  * - Holds an in-memory `Agent` from pi-agent-core
+ * - Persists conversation as a session tree via DOSessionStorage
  * - Accepts WebSocket connections (Hibernation API)
  * - Broadcasts AgentEvents to all connected clients
- * - Persists messages to DO storage on turn_end
  * - Sets an alarm to clean up after idle timeout
  */
 
-import type { AgentEvent, AgentTool } from "@earendil-works/pi-agent-core";
-import { Agent } from "@earendil-works/pi-agent-core";
+import type {
+	AgentEvent,
+	AgentMessage,
+	AgentTool,
+	SessionTreeEntry,
+} from "@earendil-works/pi-agent-core";
+import { Agent, Session } from "@earendil-works/pi-agent-core";
 import { getModel } from "@earendil-works/pi-ai";
+import { DOSessionStorage } from "./do-session-storage.ts";
 import type { ClientMessage, ServerMessage } from "./protocol.ts";
 import { parseClientMessage, serializeServerMessage } from "./protocol.ts";
-import {
-	deleteSession,
-	loadMessages,
-	saveMessages,
-} from "./session-persistence.ts";
 import type {
 	AgentEnv,
 	AgentWorkerConfig,
@@ -37,7 +38,6 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 	config: AgentWorkerConfig<Env, Ctx>,
 ) {
 	const DEFAULT_IDLE_MS = 5 * 60 * 1000; // 5 min
-	const MAX_PERSISTED = config.maxPersistedMessages ?? 200;
 
 	return class AgentSessionDO implements DurableObject {
 		/** @internal */ _ctx: DurableObjectState;
@@ -47,6 +47,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 		/** @internal */ _sessionId: string;
 		/** @internal */ _sessionContext: Ctx | undefined = undefined;
 		/** @internal */ _toolCallCount = 0;
+		/** @internal */ _session: Session | null = null;
 
 		constructor(ctx: DurableObjectState, env: Env) {
 			this._ctx = ctx;
@@ -60,6 +61,42 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 					JSON.stringify({ type: "pong" }),
 				),
 			);
+		}
+
+		// -----------------------------------------------------------------
+		// Session tree
+		// -----------------------------------------------------------------
+
+		/** @internal */
+		async _ensureSession(): Promise<Session> {
+			if (this._session) return this._session;
+			const storage =
+				(await DOSessionStorage.open(this._ctx.storage)) ??
+				(await DOSessionStorage.create(this._ctx.storage, this._sessionId));
+			this._session = new Session(storage);
+			return this._session;
+		}
+
+		/** @internal */
+		async _persistMessages(messages: AgentMessage[]): Promise<void> {
+			const session = await this._ensureSession();
+			const existingEntries = await session.getEntries();
+			const existingMessageCount = existingEntries.filter(
+				(e: SessionTreeEntry) => e.type === "message",
+			).length;
+
+			// Only append messages that are new since last persist
+			const newMessages = messages.slice(existingMessageCount);
+			for (const msg of newMessages) {
+				await session.appendMessage(msg);
+			}
+		}
+
+		/** @internal */
+		async _loadMessagesFromSession(): Promise<AgentMessage[]> {
+			const session = await this._ensureSession();
+			const ctx = await session.buildContext();
+			return ctx.messages;
 		}
 
 		// -----------------------------------------------------------------
@@ -147,9 +184,11 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 					}
 				}
 
-				// Persist on turn_end
+				// Persist on turn_end via session tree
 				if (event.type === "turn_end" && this._agent) {
-					this._ctx.waitUntil(this._persistState());
+					this._ctx.waitUntil(
+						this._persistMessages(this._agent.state.messages),
+					);
 				}
 
 				// Fire global hook
@@ -207,31 +246,20 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 		}
 
 		// -----------------------------------------------------------------
-		// Persistence
+		// Hydration
 		// -----------------------------------------------------------------
-
-		/** @internal */
-		async _persistState(): Promise<void> {
-			if (!this._agent) return;
-			await saveMessages(
-				this._ctx.storage,
-				this._agent.state.messages,
-				MAX_PERSISTED,
-			);
-		}
 
 		/**
 		 * If the in-memory agent has no messages but storage has history,
-		 * recreate the agent seeded with the persisted messages.
-		 * Called before reading state so callers always see the full history
-		 * even after the DO hibernated.
+		 * recreate the agent seeded with the persisted messages from the
+		 * session tree.
 		 */
 		/** @internal */
 		async _hydrateFromStorageIfNeeded(): Promise<void> {
 			await this._loadSessionContext();
 			const agent = this._ensureAgent(this._sessionContext);
 			if (agent.state.messages.length > 0) return; // already hydrated
-			const persisted = await loadMessages(this._ctx.storage);
+			const persisted = await this._loadMessagesFromSession();
 			if (persisted.length === 0) return;
 			// Destroy current (empty) agent and recreate with persisted messages
 			this._destroyAgent();
@@ -329,7 +357,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 
 				// Send initial state
 				await this._loadSessionContext();
-				const _agent = this._ensureAgent(this._sessionContext);
+				this._ensureAgent(this._sessionContext);
 				this._sendTo(server, {
 					type: "session_created",
 					sessionId: this._sessionId,
@@ -347,10 +375,27 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				return Response.json(state);
 			}
 
+			// REST: GET /entries — session tree entries
+			if (request.method === "GET" && url.pathname.endsWith("/entries")) {
+				const session = await this._ensureSession();
+				const entries = await session.getEntries();
+				return Response.json(entries);
+			}
+
+			// REST: GET /branch — current branch (path to leaf)
+			if (request.method === "GET" && url.pathname.endsWith("/branch")) {
+				const session = await this._ensureSession();
+				const branch = await session.getBranch();
+				return Response.json(branch);
+			}
+
 			// REST: DELETE /
 			if (request.method === "DELETE") {
 				this._destroyAgent();
-				await deleteSession(this._ctx.storage);
+				this._session = null;
+				const storage = await DOSessionStorage.open(this._ctx.storage);
+				if (storage) await storage.deleteAll();
+				else await this._ctx.storage.deleteAll();
 				return new Response(null, { status: 204 });
 			}
 
@@ -375,6 +420,42 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 					const agent = this._ensureAgent(this._sessionContext);
 					this._ctx.waitUntil(agent.prompt(body.text, body.images));
 					return Response.json({ ok: true, sessionId: this._sessionId });
+				} catch (e: any) {
+					return Response.json({ error: e.message }, { status: 400 });
+				}
+			}
+
+			// REST: POST /label — add a label to an entry
+			if (request.method === "POST" && url.pathname.endsWith("/label")) {
+				try {
+					const body = (await request.json()) as {
+						targetId: string;
+						label?: string;
+					};
+					const session = await this._ensureSession();
+					const entryId = await session.appendLabel(body.targetId, body.label);
+					return Response.json({ ok: true, entryId });
+				} catch (e: any) {
+					return Response.json({ error: e.message }, { status: 400 });
+				}
+			}
+
+			// REST: POST /navigate — move to a different branch point
+			if (request.method === "POST" && url.pathname.endsWith("/navigate")) {
+				try {
+					const body = (await request.json()) as {
+						entryId: string | null;
+						summary?: string;
+					};
+					const session = await this._ensureSession();
+					const resultId = await session.moveTo(
+						body.entryId,
+						body.summary ? { summary: body.summary } : undefined,
+					);
+					// Reload agent with new branch context
+					this._destroyAgent();
+					await this._hydrateFromStorageIfNeeded();
+					return Response.json({ ok: true, entryId: resultId });
 				} catch (e: any) {
 					return Response.json({ error: e.message }, { status: 400 });
 				}
@@ -493,22 +574,65 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 					agent.state.thinkingLevel = msg.level;
 					break;
 
-				case "clear_messages":
+				case "clear_messages": {
 					agent.state.messages = [];
-					await saveMessages(this._ctx.storage, [], MAX_PERSISTED);
+					// Reset session tree
+					this._session = null;
+					const storage = await DOSessionStorage.open(this._ctx.storage);
+					if (storage) await storage.deleteAll();
+					await DOSessionStorage.create(this._ctx.storage, this._sessionId);
 					break;
+				}
 
-				case "reset":
+				case "reset": {
 					agent.reset();
-					await deleteSession(this._ctx.storage);
+					this._session = null;
+					const resetStorage = await DOSessionStorage.open(this._ctx.storage);
+					if (resetStorage) await resetStorage.deleteAll();
+					else await this._ctx.storage.deleteAll();
 					break;
+				}
 
 				case "restore": {
-					const messages = await loadMessages(this._ctx.storage);
+					const messages = await this._loadMessagesFromSession();
 					if (messages.length > 0) {
 						agent.state.messages = messages;
 					}
 					this._sendTo(ws, { type: "restored", messages });
+					break;
+				}
+
+				case "get_entries": {
+					const session = await this._ensureSession();
+					const entries = await session.getEntries();
+					this._sendTo(ws, { type: "entries", entries });
+					break;
+				}
+
+				case "get_branch": {
+					const session = await this._ensureSession();
+					const branch = await session.getBranch();
+					this._sendTo(ws, { type: "branch", entries: branch });
+					break;
+				}
+
+				case "label": {
+					const session = await this._ensureSession();
+					await session.appendLabel(msg.targetId, msg.label);
+					break;
+				}
+
+				case "navigate": {
+					const session = await this._ensureSession();
+					await session.moveTo(
+						msg.entryId,
+						msg.summary ? { summary: msg.summary } : undefined,
+					);
+					// Reload agent with new branch context
+					this._destroyAgent();
+					await this._hydrateFromStorageIfNeeded();
+					const newState = this._getSerializableState();
+					this._sendTo(ws, { type: "state", state: newState });
 					break;
 				}
 

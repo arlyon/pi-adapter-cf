@@ -21,9 +21,13 @@ export type {
 	AgentMessage,
 	AgentOptions,
 	AgentTool,
+	SessionMetadata,
+	SessionStorage,
+	SessionTreeEntry,
 	StreamFn,
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
+export { Session } from "@earendil-works/pi-agent-core";
 export type {
 	Api,
 	ImageContent,
@@ -34,6 +38,8 @@ export type {
 export { getModel } from "@earendil-works/pi-ai";
 // ---- DO class factory (for advanced use) ----
 export { createAgentSessionDOClass } from "./agent-session-do.ts";
+// ---- Session storage ----
+export { DOSessionStorage } from "./do-session-storage.ts";
 export type { AgentWorkerExports } from "./factory.ts";
 // ---- Factory (primary API) ----
 export { createAgentWorker } from "./factory.ts";

@@ -7,6 +7,7 @@
 import type {
 	AgentEvent,
 	AgentMessage,
+	SessionTreeEntry,
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type { ImageContent } from "@earendil-works/pi-ai";
@@ -27,6 +28,14 @@ export type ClientMessage =
 	| { type: "clear_messages" }
 	| { type: "reset" }
 	| { type: "restore" }
+	| { type: "get_entries" }
+	| { type: "get_branch" }
+	| { type: "label"; targetId: string; label?: string }
+	| {
+			type: "navigate";
+			entryId: string | null;
+			summary?: string;
+	  }
 	| { type: "ping" };
 
 // ---------------------------------------------------------------------------
@@ -37,6 +46,8 @@ export type ServerMessage =
 	| { type: "event"; event: AgentEvent }
 	| { type: "state"; state: SerializableAgentState }
 	| { type: "restored"; messages: AgentMessage[] }
+	| { type: "entries"; entries: SessionTreeEntry[] }
+	| { type: "branch"; entries: SessionTreeEntry[] }
 	| { type: "error"; message: string; code?: string }
 	| { type: "session_created"; sessionId: string }
 	| { type: "pong" };
