@@ -99,8 +99,13 @@ wrangler deploy
 |--------|------|-------------|
 | `POST` | `/sessions` | Create a new session |
 | `GET` | `/sessions/:id/ws` | WebSocket upgrade |
-| `GET` | `/sessions/:id/state` | Get current agent state |
+| `GET` | `/sessions/:id/state` | Get current agent state (includes usage) |
 | `POST` | `/sessions/:id/prompt` | Send a prompt (fire-and-forget) |
+| `GET` | `/sessions/:id/usage` | Cumulative token usage and costs |
+| `GET` | `/sessions/:id/entries` | All session tree entries |
+| `GET` | `/sessions/:id/branch` | Current branch path |
+| `POST` | `/sessions/:id/label` | Add/remove label on an entry |
+| `POST` | `/sessions/:id/navigate` | Move to a different branch point |
 | `DELETE` | `/sessions/:id` | Delete session & data |
 | `GET` | `/health` | Health check |
 
@@ -121,6 +126,10 @@ Connect to `/sessions/:id/ws` and send JSON messages:
 { "type": "clear_messages" }                       // Clear history
 { "type": "reset" }                                // Full reset
 { "type": "restore" }                              // Restore from storage
+{ "type": "get_entries" }                          // Get session tree entries
+{ "type": "get_branch" }                           // Get current branch
+{ "type": "label", "targetId": "...", "label": "..." }  // Add label
+{ "type": "navigate", "entryId": "..." }           // Move to branch point
 { "type": "ping" }
 ```
 
@@ -129,7 +138,10 @@ Connect to `/sessions/:id/ws` and send JSON messages:
 ```jsonc
 { "type": "event", "event": { "type": "message_update", ... } }  // AgentEvent stream
 { "type": "state", "state": { ... } }              // State response
+{ "type": "usage_update", "usage": { ... } }       // After each assistant turn
 { "type": "restored", "messages": [...] }           // Restored messages
+{ "type": "entries", "entries": [...] }             // Session tree entries
+{ "type": "branch", "entries": [...] }              // Current branch path
 { "type": "error", "message": "...", "code": "..." }
 { "type": "session_created", "sessionId": "..." }
 { "type": "pong" }
@@ -153,6 +165,7 @@ Connect to `/sessions/:id/ws` and send JSON messages:
 | `maxSessionIdleMs` | `number` | Idle timeout before memory cleanup (default: 5min) |
 | `maxPersistedMessages` | `number` | Max messages to persist (default: 200) |
 | `maxToolCalls` | `number` | Max tool calls per prompt (default: unlimited) |
+| `onUsage` | `(sessionId, usage, env, ctx) => void` | Called after each turn with cumulative usage |
 
 ## Architecture
 
