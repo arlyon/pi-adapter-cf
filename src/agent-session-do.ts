@@ -27,8 +27,8 @@ import { saveMessages, loadMessages, deleteSession } from "./session-persistence
  * Create an AgentSession Durable Object class with the given config baked in.
  * This is called by `createAgentWorker()`.
  */
-export function createAgentSessionDOClass<Env extends AgentEnv>(
-  config: AgentWorkerConfig<Env>,
+export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
+  config: AgentWorkerConfig<Env, Ctx>,
 ) {
   const DEFAULT_IDLE_MS = 5 * 60 * 1000; // 5 min
   const MAX_PERSISTED = config.maxPersistedMessages ?? 200;
@@ -39,6 +39,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
     /** @internal */ _agent: Agent | null = null;
     /** @internal */ _unsubscribe: (() => void) | null = null;
     /** @internal */ _sessionId: string;
+    /** @internal */ _sessionContext: Ctx | undefined = undefined;
 
     constructor(ctx: DurableObjectState, env: Env) {
       this._ctx = ctx;
@@ -56,16 +57,27 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
     // -----------------------------------------------------------------
 
     /** @internal */
-    _ensureAgent(): Agent {
+    async _loadSessionContext(): Promise<Ctx | undefined> {
+      if (this._sessionContext !== undefined) return this._sessionContext;
+      const stored = await this._ctx.storage.get<Ctx>("session_context");
+      if (stored !== undefined) this._sessionContext = stored;
+      return this._sessionContext;
+    }
+
+    /** @internal */
+    _ensureAgent(ctx?: Ctx): Agent {
       if (this._agent) return this._agent;
 
       const env = this._env;
+      const sessionCtx = ctx ?? this._sessionContext;
       const systemPrompt =
         typeof config.systemPrompt === "function"
           ? config.systemPrompt(env)
           : config.systemPrompt;
 
-      const tools: AgentTool<any>[] = config.tools ? config.tools(env) : [];
+      const tools: AgentTool<any>[] = config.tools
+        ? config.tools(env, sessionCtx as Ctx)
+        : [];
 
       this._agent = new Agent({
         initialState: {
@@ -93,7 +105,9 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
         // Fire global hook
         if (config.onEvent) {
           try {
-            const result = config.onEvent(this._sessionId, event, env);
+            const result = config.onEvent(
+              this._sessionId, event, env, sessionCtx as Ctx,
+            );
             if (result instanceof Promise) {
               this._ctx.waitUntil(result);
             }
@@ -125,7 +139,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
 
     /** @internal */
     _getSerializableState(): SerializableAgentState {
-      const agent = this._ensureAgent();
+      const agent = this._ensureAgent(this._sessionContext);
       const s = agent.state;
       return {
         systemPrompt: s.systemPrompt,
@@ -157,18 +171,22 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
      */
     /** @internal */
     async _hydrateFromStorageIfNeeded(): Promise<void> {
-      const agent = this._ensureAgent();
+      await this._loadSessionContext();
+      const agent = this._ensureAgent(this._sessionContext);
       if (agent.state.messages.length > 0) return; // already hydrated
       const persisted = await loadMessages(this._ctx.storage);
       if (persisted.length === 0) return;
       // Destroy current (empty) agent and recreate with persisted messages
       this._destroyAgent();
       const env = this._env;
+      const sessionCtx = this._sessionContext;
       const systemPrompt =
         typeof config.systemPrompt === "function"
           ? config.systemPrompt(env)
           : config.systemPrompt;
-      const tools: AgentTool<any>[] = config.tools ? config.tools(env) : [];
+      const tools: AgentTool<any>[] = config.tools
+        ? config.tools(env, sessionCtx as Ctx)
+        : [];
       this._agent = new Agent({
         initialState: {
           systemPrompt,
@@ -251,7 +269,8 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
         this._ctx.acceptWebSocket(server);
 
         // Send initial state
-        const agent = this._ensureAgent();
+        await this._loadSessionContext();
+        const agent = this._ensureAgent(this._sessionContext);
         this._sendTo(server, { type: "session_created", sessionId: this._sessionId });
 
         this._scheduleIdleAlarm();
@@ -276,8 +295,19 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
       // REST: POST /prompt  (fire-and-forget prompt via HTTP)
       if (request.method === "POST" && url.pathname.endsWith("/prompt")) {
         try {
+          if (config.extractSessionContext) {
+            const ctx = await config.extractSessionContext(request, this._env);
+            this._sessionContext = ctx;
+            await this._ctx.storage.put("session_context", ctx);
+            // If agent already exists, destroy and recreate with new context
+            if (this._agent) {
+              this._destroyAgent();
+            }
+          }
+          // Restore persisted conversation history before prompting
+          await this._hydrateFromStorageIfNeeded();
           const body = (await request.json()) as { text: string; images?: any[] };
-          const agent = this._ensureAgent();
+          const agent = this._ensureAgent(this._sessionContext);
           this._ctx.waitUntil(agent.prompt(body.text, body.images));
           return Response.json({ ok: true, sessionId: this._sessionId });
         } catch (e: any) {
@@ -325,7 +355,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
 
     /** @internal */
     async _handleClientMessage(ws: WebSocket, msg: ClientMessage): Promise<void> {
-      const agent = this._ensureAgent();
+      const agent = this._ensureAgent(this._sessionContext);
 
       switch (msg.type) {
         case "prompt":

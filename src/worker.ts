@@ -13,8 +13,8 @@ import type { AgentEnv, AgentWorkerConfig, SessionInfo } from "./types.js";
 // Router factory
 // ---------------------------------------------------------------------------
 
-export function createWorkerHandler<Env extends AgentEnv>(
-  config: AgentWorkerConfig<Env>,
+export function createWorkerHandler<Env extends AgentEnv, Ctx = void>(
+  config: AgentWorkerConfig<Env, Ctx>,
 ) {
   return {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

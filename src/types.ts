@@ -23,7 +23,7 @@ export interface AgentEnv {
 // Agent Worker Configuration — the main DI surface
 // ---------------------------------------------------------------------------
 
-export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv> {
+export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv, Ctx = void> {
   /**
    * System prompt for the agent.
    * Can be a static string or a function that receives the CF env.
@@ -32,9 +32,9 @@ export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv> {
 
   /**
    * Factory that returns the tools available to the agent.
-   * Receives the CF env so tools can access KV, R2, D1, AI, etc.
+   * Receives the CF env and optional session context.
    */
-  tools?: (env: Env) => AgentTool<any>[];
+  tools?: (env: Env, ctx: Ctx) => AgentTool<any>[];
 
   /**
    * Default LLM model. If omitted the pi-ai default is used
@@ -45,16 +45,6 @@ export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv> {
   /**
    * Resolve an API key for a given provider.
    * Typically reads from `env` secrets.
-   *
-   * @example
-   * getApiKey: (provider, env) => {
-   *   const map: Record<string, string | undefined> = {
-   *     anthropic: env.ANTHROPIC_API_KEY as string,
-   *     openai:    env.OPENAI_API_KEY as string,
-   *     google:    env.GOOGLE_API_KEY as string,
-   *   };
-   *   return map[provider];
-   * }
    */
   getApiKey: (provider: string, env: Env) => string | undefined | Promise<string | undefined>;
 
@@ -84,7 +74,7 @@ export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv> {
    * Global event hook — called for every AgentEvent in every session.
    * Useful for logging / analytics.
    */
-  onEvent?: (sessionId: string, event: AgentEvent, env: Env) => void | Promise<void>;
+  onEvent?: (sessionId: string, event: AgentEvent, env: Env, ctx: Ctx) => void | Promise<void>;
 
   /**
    * Authentication middleware.
@@ -92,6 +82,13 @@ export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv> {
    * If omitted all requests are allowed.
    */
   authenticate?: (request: Request, env: Env) => boolean | Promise<boolean>;
+
+  /**
+   * Extract per-session context from an incoming request.
+   * The returned value is stored in DO storage and passed to `tools` and `onEvent`.
+   * Called on each prompt request; the latest value is persisted.
+   */
+  extractSessionContext?: (request: Request, env: Env) => Ctx | Promise<Ctx>;
 
   /**
    * How long (ms) a Durable Object should stay alive after the last

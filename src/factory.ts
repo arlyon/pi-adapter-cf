@@ -34,7 +34,7 @@ export interface AgentWorkerExports<Env extends AgentEnv> {
    * The Durable Object class to export from your worker module.
    * Must be referenced in `wrangler.toml` under `[durable_objects.bindings]`.
    */
-  AgentSessionDO: ReturnType<typeof createAgentSessionDOClass<Env>>;
+  AgentSessionDO: ReturnType<typeof createAgentSessionDOClass<Env, any>>;
 
   /**
    * The worker fetch handler. Export as `default`.
@@ -60,11 +60,11 @@ export interface AgentWorkerExports<Env extends AgentEnv> {
  * @param config  DI configuration — system prompt, tools, API keys, etc.
  * @returns       `{ AgentSessionDO, handler }` ready to export.
  */
-export function createAgentWorker<Env extends AgentEnv = AgentEnv>(
-  config: AgentWorkerConfig<Env>,
+export function createAgentWorker<Env extends AgentEnv = AgentEnv, Ctx = void>(
+  config: AgentWorkerConfig<Env, Ctx>,
 ): AgentWorkerExports<Env> {
-  const AgentSessionDO = createAgentSessionDOClass<Env>(config);
-  const router = createWorkerHandler<Env>(config);
+  const AgentSessionDO = createAgentSessionDOClass<Env, Ctx>(config);
+  const router = createWorkerHandler<Env, Ctx>(config);
 
   return {
     AgentSessionDO,
