@@ -5,7 +5,7 @@
  * conversations into chunks to stay within the 128 KiB per-key limit.
  */
 
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
 const CHUNK_PREFIX = "msgs:";
 const META_KEY = "meta";

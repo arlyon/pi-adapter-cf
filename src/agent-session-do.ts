@@ -9,10 +9,10 @@
  * - Sets an alarm to clean up after idle timeout
  */
 
-import { Agent } from "@mariozechner/pi-agent-core";
-import type { AgentEvent, AgentMessage, AgentTool } from "@mariozechner/pi-agent-core";
-import { getModel, getProviders } from "@mariozechner/pi-ai";
-import type { Model, Api } from "@mariozechner/pi-ai";
+import { Agent } from "@earendil-works/pi-agent-core";
+import type { AgentEvent, AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
+import { getModel, getProviders } from "@earendil-works/pi-ai";
+import type { Model, Api } from "@earendil-works/pi-ai";
 
 import type { AgentEnv, AgentWorkerConfig, SerializableAgentState } from "./types.js";
 import type { ClientMessage, ServerMessage } from "./protocol.js";

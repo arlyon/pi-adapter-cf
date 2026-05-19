@@ -11,7 +11,7 @@
  *   type AgentEnv,
  *   type ClientMessage,
  *   type ServerMessage,
- * } from '@funtuantw/pi-agent-cf';
+ * } from 'pi-adapter-cf';
  * ```
  */
 
@@ -51,19 +51,19 @@ export type {
   AgentEvent,
   AgentMessage,
   AgentOptions,
-} from "@mariozechner/pi-agent-core";
+} from "@earendil-works/pi-agent-core";
 
 export type {
   Model,
   Api,
   ImageContent,
   Tool,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 
 export type {
   StreamFn,
   ThinkingLevel,
-} from "@mariozechner/pi-agent-core";
+} from "@earendil-works/pi-agent-core";
 
 // Re-export useful runtime functions from pi-ai
-export { getModel } from "@mariozechner/pi-ai";
+export { getModel } from "@earendil-works/pi-ai";

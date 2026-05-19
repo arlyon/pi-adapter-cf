@@ -4,9 +4,9 @@
  * JSON-based bidirectional messages between client and AgentSession DO.
  */
 
-import type { AgentMessage, AgentEvent } from "@mariozechner/pi-agent-core";
-import type { ImageContent } from "@mariozechner/pi-ai";
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { AgentMessage, AgentEvent } from "@earendil-works/pi-agent-core";
+import type { ImageContent } from "@earendil-works/pi-ai";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { SerializableAgentState } from "./types.js";
 
 // ---------------------------------------------------------------------------

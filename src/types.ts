@@ -4,8 +4,8 @@
  * All public extension points for customizing agent behavior on CF Workers.
  */
 
-import type { AgentTool, AgentEvent, AgentOptions, AgentMessage, StreamFn, ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { Model, Api, ImageContent } from "@mariozechner/pi-ai";
+import type { AgentTool, AgentEvent, AgentOptions, AgentMessage, StreamFn, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Model, Api, ImageContent } from "@earendil-works/pi-ai";
 
 // ---------------------------------------------------------------------------
 // Environment — Base env shape expected by the SDK
