@@ -432,6 +432,15 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				return Response.json(state);
 			}
 
+			// REST: GET /usage — cumulative token usage
+			if (request.method === "GET" && url.pathname.endsWith("/usage")) {
+				return Response.json(
+					this._usage.turnCount > 0
+						? this._usage
+						: { turnCount: 0, totalTokens: 0 },
+				);
+			}
+
 			// REST: GET /entries — session tree entries
 			if (request.method === "GET" && url.pathname.endsWith("/entries")) {
 				const session = await this._ensureSession();

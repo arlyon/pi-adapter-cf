@@ -64,6 +64,18 @@ export function createWorkerHandler<Env extends AgentEnv, Ctx = void>(
 				return cors(request, resp);
 			}
 
+			// GET /sessions/:id/usage — cumulative token usage
+			const usageMatch = path.match(/^\/sessions\/([^/]+)\/usage$/);
+			if (usageMatch && request.method === "GET") {
+				const sessionId = usageMatch[1];
+				const resp = await forwardToDO(
+					env,
+					sessionId,
+					new Request(new URL("/usage", request.url), { method: "GET" }),
+				);
+				return cors(request, resp);
+			}
+
 			// POST /sessions/:id/prompt — REST prompt (fire-and-forget)
 			const promptMatch = path.match(/^\/sessions\/([^/]+)\/prompt$/);
 			if (promptMatch && request.method === "POST") {
