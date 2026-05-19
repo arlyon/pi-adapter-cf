@@ -135,7 +135,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
         toolNames: s.tools.map((t) => t.name),
         messages: s.messages,
         isStreaming: s.isStreaming,
-        error: s.error,
+        error: s.errorMessage,
       };
     }
 
@@ -353,7 +353,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
           try {
             const model = getModel(msg.provider as any, msg.modelId as any);
             if (model) {
-              agent.setModel(model);
+              agent.state.model = model;
             } else {
               this._sendTo(ws, {
                 type: "error",
@@ -372,11 +372,11 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
         }
 
         case "set_thinking_level":
-          agent.setThinkingLevel(msg.level);
+          agent.state.thinkingLevel = msg.level;
           break;
 
         case "clear_messages":
-          agent.clearMessages();
+          agent.state.messages = [];
           await saveMessages(this._ctx.storage, [], MAX_PERSISTED);
           break;
 
@@ -388,7 +388,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv>(
         case "restore": {
           const messages = await loadMessages(this._ctx.storage);
           if (messages.length > 0) {
-            agent.replaceMessages(messages);
+            agent.state.messages = messages;
           }
           this._sendTo(ws, { type: "restored", messages });
           break;
