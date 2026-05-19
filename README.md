@@ -1,4 +1,6 @@
-# @funtuantw/pi-agent-cf
+# pi-adapter-cf
+
+> Fork of [@funtuantw/pi-agent-cf](https://github.com/funtuan/pi-agent-cf) — updated to use [@earendil-works](https://github.com/nickarellano/earendil-works) packages.
 
 Deploy [pi-mono](https://github.com/badlogic/pi-mono) AI agents on **Cloudflare Workers** with **Durable Objects**.
 
@@ -12,20 +14,22 @@ Dependency-injection friendly SDK — inject your own tools, LLM providers, API 
 - **Dependency injection** — factory function accepts tools, API keys, system prompt, event hooks, auth middleware
 - **Multi-client** — multiple WebSocket clients can share the same agent session
 - **Idle cleanup** — configurable alarm auto-evicts unused sessions from memory
+- **Session context** — extract per-request context and pass it to tools and event hooks
+- **Tool call limits** — configurable max tool calls per prompt with gradual steering
 
 ## Quick Start
 
 ### 1. Install
 
 ```bash
-npm install @funtuantw/pi-agent-cf @mariozechner/pi-agent-core @mariozechner/pi-ai
+npm install pi-adapter-cf @earendil-works/pi-agent-core @earendil-works/pi-ai
 ```
 
 ### 2. Create your worker
 
 ```typescript
 // src/index.ts
-import { createAgentWorker, type AgentEnv, type AgentTool } from '@funtuantw/pi-agent-cf';
+import { createAgentWorker, type AgentEnv, type AgentTool } from 'pi-adapter-cf';
 import { Type } from '@sinclair/typebox';
 
 interface Env extends AgentEnv {
@@ -77,7 +81,7 @@ new_classes = ["AgentSessionDO"]
 # Required: AJV uses new Function() which is forbidden in CF Workers.
 # This stub disables schema validation; pi-ai falls back to trusting LLM output.
 [alias]
-"ajv" = "node_modules/@funtuantw/pi-agent-cf/stubs/ajv.js"
+"ajv" = "node_modules/pi-adapter-cf/stubs/ajv.js"
 ```
 
 ### 4. Set secrets & deploy
@@ -93,7 +97,7 @@ wrangler deploy
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/sessions` | Create a new session → `{ sessionId, createdAt }` |
+| `POST` | `/sessions` | Create a new session |
 | `GET` | `/sessions/:id/ws` | WebSocket upgrade |
 | `GET` | `/sessions/:id/state` | Get current agent state |
 | `POST` | `/sessions/:id/prompt` | Send a prompt (fire-and-forget) |
@@ -104,7 +108,7 @@ wrangler deploy
 
 Connect to `/sessions/:id/ws` and send JSON messages:
 
-**Client → Server:**
+**Client -> Server:**
 
 ```jsonc
 { "type": "prompt", "text": "Hello!" }           // Start a conversation
@@ -120,7 +124,7 @@ Connect to `/sessions/:id/ws` and send JSON messages:
 { "type": "ping" }
 ```
 
-**Server → Client:**
+**Server -> Client:**
 
 ```jsonc
 { "type": "event", "event": { "type": "message_update", ... } }  // AgentEvent stream
@@ -137,38 +141,32 @@ Connect to `/sessions/:id/ws` and send JSON messages:
 |----------|------|-------------|
 | `systemPrompt` | `string \| (env) => string` | **Required.** System prompt for the agent |
 | `getApiKey` | `(provider, env) => string?` | **Required.** Resolve API keys from env secrets |
-| `tools` | `(env) => AgentTool[]` | Custom tools (receive CF env for bindings) |
+| `tools` | `(env, ctx) => AgentTool[]` | Custom tools (receive CF env and session context) |
 | `model` | `Model` | Default LLM model |
 | `streamFn` | `StreamFn` | Custom stream function (e.g. AI Gateway routing) |
 | `transformContext` | `fn` | Transform context before LLM call (e.g. RAG injection) |
 | `convertToLlm` | `fn` | Custom message format conversion |
 | `thinkingLevel` | `ThinkingLevel` | Default thinking level |
-| `onEvent` | `(sessionId, event, env) => void` | Global event hook for logging/analytics |
+| `onEvent` | `(sessionId, event, env, ctx) => void` | Global event hook for logging/analytics |
 | `authenticate` | `(request, env) => boolean` | Auth middleware |
+| `extractSessionContext` | `(request, env) => Ctx` | Extract per-session context from requests |
 | `maxSessionIdleMs` | `number` | Idle timeout before memory cleanup (default: 5min) |
 | `maxPersistedMessages` | `number` | Max messages to persist (default: 200) |
+| `maxToolCalls` | `number` | Max tool calls per prompt (default: unlimited) |
 
 ## Architecture
 
 ```
 Client (Browser/App)
-    ↕ WebSocket / REST
+    <-> WebSocket / REST
 CF Worker (Router)
-    ↕ Durable Object stub
+    <-> Durable Object stub
 AgentSession DO (one per session)
-    ├── Agent instance (pi-agent-core)
-    ├── StreamFn → LLM Provider (pi-ai fetch)
-    ├── Custom Tools (injected via config)
-    └── DO Storage (persistent messages)
+    |-- Agent instance (pi-agent-core)
+    |-- StreamFn -> LLM Provider (pi-ai fetch)
+    |-- Custom Tools (injected via config)
+    +-- DO Storage (persistent messages)
 ```
-
-- **Worker Router** — handles HTTP routing, CORS, auth, creates DO stubs
-- **AgentSession DO** — one instance per conversation session
-  - Manages the `Agent` lifecycle from `pi-agent-core`
-  - Accepts WebSocket connections with [Hibernation API](https://developers.cloudflare.com/durable-objects/api/websockets/) (cost-efficient)
-  - Broadcasts all `AgentEvent`s to connected clients
-  - Persists messages to DO storage on each turn completion
-  - Cleans up in-memory resources after idle timeout via alarm
 
 ## Compatibility
 
@@ -178,13 +176,11 @@ AgentSession DO (one per session)
 
 The SDK uses only `pi-agent-core` (zero Node.js deps) and `pi-ai` (uses `fetch()` for LLM calls). The following providers work out of the box on CF Workers:
 
-- ✅ Google (Gemini)
-- ✅ Anthropic (Claude)
-- ✅ OpenAI (GPT, o-series)
-- ✅ Azure OpenAI
-- ✅ OpenAI-compatible (Groq, OpenRouter, etc.)
-- ❌ AWS Bedrock (requires AWS SDK)
-- ❌ OAuth flows (require HTTP callback server)
+- Google (Gemini)
+- Anthropic (Claude)
+- OpenAI (GPT, o-series)
+- Azure OpenAI
+- OpenAI-compatible (Groq, OpenRouter, etc.)
 
 ## License
 
