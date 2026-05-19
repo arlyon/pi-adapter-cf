@@ -103,6 +103,13 @@ export interface AgentWorkerConfig<Env extends AgentEnv = AgentEnv, Ctx = void> 
    * Older messages are dropped on save. Default: 200.
    */
   maxPersistedMessages?: number;
+
+  /**
+   * Maximum number of tool calls allowed per prompt.
+   * When reached, the agent is steered to produce a text response
+   * with the data gathered so far. Default: unlimited.
+   */
+  maxToolCalls?: number;
 }
 
 // ---------------------------------------------------------------------------

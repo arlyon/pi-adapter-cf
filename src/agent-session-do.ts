@@ -40,6 +40,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
     /** @internal */ _unsubscribe: (() => void) | null = null;
     /** @internal */ _sessionId: string;
     /** @internal */ _sessionContext: Ctx | undefined = undefined;
+    /** @internal */ _toolCallCount = 0;
 
     constructor(ctx: DurableObjectState, env: Env) {
       this._ctx = ctx;
@@ -96,6 +97,30 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
       // Subscribe to events and broadcast to all connected WS clients
       this._unsubscribe = this._agent.subscribe((event) => {
         this._broadcastEvent(event);
+
+        // Reset tool call counter at the start of each prompt
+        if (event.type === "agent_start") {
+          this._toolCallCount = 0;
+        }
+
+        // Enforce max tool calls per prompt
+        if (event.type === "tool_execution_end" && config.maxToolCalls && this._agent) {
+          this._toolCallCount++;
+          const warningAt = Math.floor(config.maxToolCalls * 2 / 3);
+          if (this._toolCallCount === warningAt) {
+            this._agent.steer({
+              role: "user",
+              content: [{ type: "text", text: `You have used ${this._toolCallCount} of ${config.maxToolCalls} available tool calls. Start wrapping up and prepare to respond with what you have.` }],
+              timestamp: Date.now(),
+            });
+          } else if (this._toolCallCount >= config.maxToolCalls) {
+            this._agent.steer({
+              role: "user",
+              content: [{ type: "text", text: "You have reached the maximum number of tool calls for this request. Respond now with the information you have gathered so far." }],
+              timestamp: Date.now(),
+            });
+          }
+        }
 
         // Persist on turn_end
         if (event.type === "turn_end" && this._agent) {
