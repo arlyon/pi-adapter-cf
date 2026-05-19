@@ -11,7 +11,7 @@ import type {
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type { ImageContent } from "@earendil-works/pi-ai";
-import type { SerializableAgentState } from "./types.ts";
+import type { SerializableAgentState, SessionUsage } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Client → Server
@@ -48,6 +48,7 @@ export type ServerMessage =
 	| { type: "restored"; messages: AgentMessage[] }
 	| { type: "entries"; entries: SessionTreeEntry[] }
 	| { type: "branch"; entries: SessionTreeEntry[] }
+	| { type: "usage_update"; usage: SessionUsage }
 	| { type: "error"; message: string; code?: string }
 	| { type: "session_created"; sessionId: string }
 	| { type: "pong" };

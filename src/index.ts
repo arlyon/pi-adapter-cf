@@ -59,6 +59,7 @@ export type {
 	AgentWorkerConfig,
 	SerializableAgentState,
 	SessionInfo,
+	SessionUsage,
 } from "./types.ts";
 // ---- Router factory (for advanced use) ----
 export { createWorkerHandler } from "./worker.ts";

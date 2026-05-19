@@ -16,6 +16,7 @@ import type {
 	SessionTreeEntry,
 } from "@earendil-works/pi-agent-core";
 import { Agent, Session } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
 import { getModel } from "@earendil-works/pi-ai";
 import { DOSessionStorage } from "./do-session-storage.ts";
 import type { ClientMessage, ServerMessage } from "./protocol.ts";
@@ -24,6 +25,7 @@ import type {
 	AgentEnv,
 	AgentWorkerConfig,
 	SerializableAgentState,
+	SessionUsage,
 } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +50,15 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 		/** @internal */ _sessionContext: Ctx | undefined = undefined;
 		/** @internal */ _toolCallCount = 0;
 		/** @internal */ _session: Session | null = null;
+		/** @internal */ _usage: SessionUsage = {
+			totalInput: 0,
+			totalOutput: 0,
+			totalCacheRead: 0,
+			totalCacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			turnCount: 0,
+		};
 
 		constructor(ctx: DurableObjectState, env: Env) {
 			this._ctx = ctx;
@@ -191,6 +202,35 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 					);
 				}
 
+				// Accumulate usage from assistant messages
+				if (event.type === "message_end") {
+					const msg = event.message as AssistantMessage;
+					if (msg?.role === "assistant" && msg.usage) {
+						this._accumulateUsage(msg.usage);
+						this._broadcast({
+							type: "usage_update",
+							usage: this._usage,
+						});
+
+						// Fire onUsage hook
+						if (config.onUsage) {
+							try {
+								const result = config.onUsage(
+									this._sessionId,
+									this._usage,
+									env,
+									sessionCtx as Ctx,
+								);
+								if (result instanceof Promise) {
+									this._ctx.waitUntil(result);
+								}
+							} catch {
+								// Don't let hook errors crash the agent
+							}
+						}
+					}
+				}
+
 				// Fire global hook
 				if (config.onEvent) {
 					try {
@@ -210,6 +250,22 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 			});
 
 			return this._agent;
+		}
+
+		/** @internal */
+		_accumulateUsage(usage: Usage): void {
+			this._usage.totalInput += usage.input;
+			this._usage.totalOutput += usage.output;
+			this._usage.totalCacheRead += usage.cacheRead;
+			this._usage.totalCacheWrite += usage.cacheWrite;
+			this._usage.totalTokens += usage.totalTokens;
+			this._usage.cost.input += usage.cost.input;
+			this._usage.cost.output += usage.cost.output;
+			this._usage.cost.cacheRead += usage.cost.cacheRead;
+			this._usage.cost.cacheWrite += usage.cost.cacheWrite;
+			this._usage.cost.total += usage.cost.total;
+			this._usage.turnCount++;
+			this._usage.lastTurn = usage;
 		}
 
 		/** @internal */
@@ -242,6 +298,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				messages: s.messages,
 				isStreaming: s.isStreaming,
 				error: s.errorMessage,
+				usage: this._usage.turnCount > 0 ? this._usage : undefined,
 			};
 		}
 
