@@ -80,6 +80,62 @@ export function createWorkerHandler<Env extends AgentEnv, Ctx = void>(
 				return cors(request, resp);
 			}
 
+			// GET /sessions/:id/entries — session tree entries
+			const entriesMatch = path.match(/^\/sessions\/([^/]+)\/entries$/);
+			if (entriesMatch && request.method === "GET") {
+				const sessionId = entriesMatch[1];
+				const resp = await forwardToDO(
+					env,
+					sessionId,
+					new Request(new URL("/entries", request.url), { method: "GET" }),
+				);
+				return cors(request, resp);
+			}
+
+			// GET /sessions/:id/branch — current branch path
+			const branchMatch = path.match(/^\/sessions\/([^/]+)\/branch$/);
+			if (branchMatch && request.method === "GET") {
+				const sessionId = branchMatch[1];
+				const resp = await forwardToDO(
+					env,
+					sessionId,
+					new Request(new URL("/branch", request.url), { method: "GET" }),
+				);
+				return cors(request, resp);
+			}
+
+			// POST /sessions/:id/label — add/remove label
+			const labelMatch = path.match(/^\/sessions\/([^/]+)\/label$/);
+			if (labelMatch && request.method === "POST") {
+				const sessionId = labelMatch[1];
+				const resp = await forwardToDO(
+					env,
+					sessionId,
+					new Request(new URL("/label", request.url), {
+						method: "POST",
+						body: request.body,
+						headers: request.headers,
+					}),
+				);
+				return cors(request, resp);
+			}
+
+			// POST /sessions/:id/navigate — move to branch point
+			const navigateMatch = path.match(/^\/sessions\/([^/]+)\/navigate$/);
+			if (navigateMatch && request.method === "POST") {
+				const sessionId = navigateMatch[1];
+				const resp = await forwardToDO(
+					env,
+					sessionId,
+					new Request(new URL("/navigate", request.url), {
+						method: "POST",
+						body: request.body,
+						headers: request.headers,
+					}),
+				);
+				return cors(request, resp);
+			}
+
 			// DELETE /sessions/:id — delete session
 			const deleteMatch = path.match(/^\/sessions\/([^/]+)$/);
 			if (deleteMatch && request.method === "DELETE") {
