@@ -12,7 +12,7 @@ import type {
 	StreamFn,
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai";
+import type { Model, Usage } from "@earendil-works/pi-ai";
 
 // ---------------------------------------------------------------------------
 // Environment — Base env shape expected by the SDK
@@ -128,6 +128,17 @@ export interface AgentWorkerConfig<
 	 * with the data gathered so far. Default: unlimited.
 	 */
 	maxToolCalls?: number;
+
+	/**
+	 * Called after each assistant turn with cumulative usage for the session.
+	 * Use this for budget enforcement, cost alerting, or analytics.
+	 */
+	onUsage?: (
+		sessionId: string,
+		usage: SessionUsage,
+		env: Env,
+		ctx: Ctx,
+	) => void | Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +154,40 @@ export interface SerializableAgentState {
 	messages: AgentMessage[];
 	isStreaming: boolean;
 	error?: string;
+	usage?: SessionUsage;
+}
+
+// ---------------------------------------------------------------------------
+// Usage tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Cumulative token usage and cost for a session.
+ * Aggregated from individual AssistantMessage.usage across all turns.
+ */
+export interface SessionUsage {
+	/** Total input tokens across all turns. */
+	totalInput: number;
+	/** Total output tokens across all turns. */
+	totalOutput: number;
+	/** Total cache-read tokens across all turns. */
+	totalCacheRead: number;
+	/** Total cache-write tokens across all turns. */
+	totalCacheWrite: number;
+	/** Total tokens (input + output) across all turns. */
+	totalTokens: number;
+	/** Cumulative cost breakdown. */
+	cost: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		total: number;
+	};
+	/** Number of LLM turns that contributed to this usage. */
+	turnCount: number;
+	/** The usage from the most recent turn, if available. */
+	lastTurn?: Usage;
 }
 
 // ---------------------------------------------------------------------------
