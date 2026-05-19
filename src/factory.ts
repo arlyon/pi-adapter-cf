@@ -21,33 +21,33 @@
  * ```
  */
 
-import type { AgentEnv, AgentWorkerConfig } from "./types.js";
-import { createAgentSessionDOClass } from "./agent-session-do.js";
-import { createWorkerHandler } from "./worker.js";
+import { createAgentSessionDOClass } from "./agent-session-do.ts";
+import type { AgentEnv, AgentWorkerConfig } from "./types.ts";
+import { createWorkerHandler } from "./worker.ts";
 
 // ---------------------------------------------------------------------------
 // Return type
 // ---------------------------------------------------------------------------
 
 export interface AgentWorkerExports<Env extends AgentEnv> {
-  /**
-   * The Durable Object class to export from your worker module.
-   * Must be referenced in `wrangler.toml` under `[durable_objects.bindings]`.
-   */
-  AgentSessionDO: ReturnType<typeof createAgentSessionDOClass<Env, any>>;
+	/**
+	 * The Durable Object class to export from your worker module.
+	 * Must be referenced in `wrangler.toml` under `[durable_objects.bindings]`.
+	 */
+	AgentSessionDO: ReturnType<typeof createAgentSessionDOClass<Env, any>>;
 
-  /**
-   * The worker fetch handler. Export as `default`.
-   *
-   * Handles:
-   *  - POST /sessions                → create session
-   *  - GET  /sessions/:id/ws         → WebSocket upgrade
-   *  - GET  /sessions/:id/state      → REST state query
-   *  - POST /sessions/:id/prompt     → REST prompt
-   *  - DELETE /sessions/:id          → delete session
-   *  - GET  /health                  → health check
-   */
-  handler: ExportedHandler<Env>;
+	/**
+	 * The worker fetch handler. Export as `default`.
+	 *
+	 * Handles:
+	 *  - POST /sessions                → create session
+	 *  - GET  /sessions/:id/ws         → WebSocket upgrade
+	 *  - GET  /sessions/:id/state      → REST state query
+	 *  - POST /sessions/:id/prompt     → REST prompt
+	 *  - DELETE /sessions/:id          → delete session
+	 *  - GET  /health                  → health check
+	 */
+	handler: ExportedHandler<Env>;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,15 +61,15 @@ export interface AgentWorkerExports<Env extends AgentEnv> {
  * @returns       `{ AgentSessionDO, handler }` ready to export.
  */
 export function createAgentWorker<Env extends AgentEnv = AgentEnv, Ctx = void>(
-  config: AgentWorkerConfig<Env, Ctx>,
+	config: AgentWorkerConfig<Env, Ctx>,
 ): AgentWorkerExports<Env> {
-  const AgentSessionDO = createAgentSessionDOClass<Env, Ctx>(config);
-  const router = createWorkerHandler<Env, Ctx>(config);
+	const AgentSessionDO = createAgentSessionDOClass<Env, Ctx>(config);
+	const router = createWorkerHandler<Env, Ctx>(config);
 
-  return {
-    AgentSessionDO,
-    handler: {
-      fetch: router.fetch,
-    },
-  };
+	return {
+		AgentSessionDO,
+		handler: {
+			fetch: router.fetch,
+		},
+	};
 }

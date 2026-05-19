@@ -15,55 +15,44 @@
  * ```
  */
 
-// ---- Factory (primary API) ----
-export { createAgentWorker } from "./factory.js";
-export type { AgentWorkerExports } from "./factory.js";
-
-// ---- Types / DI interfaces ----
-export type {
-  AgentEnv,
-  AgentWorkerConfig,
-  SerializableAgentState,
-  SessionInfo,
-} from "./types.js";
-
-// ---- Protocol (for custom client implementations) ----
-export type { ClientMessage, ServerMessage } from "./protocol.js";
-export { parseClientMessage, serializeServerMessage } from "./protocol.js";
-
-// ---- Persistence (for advanced use) ----
-export {
-  saveMessages,
-  loadMessages,
-  deleteSession,
-  hasPersistedSession,
-} from "./session-persistence.js";
-
-// ---- DO class factory (for advanced use) ----
-export { createAgentSessionDOClass } from "./agent-session-do.js";
-
-// ---- Router factory (for advanced use) ----
-export { createWorkerHandler } from "./worker.js";
-
 // ---- Re-export commonly needed pi-agent-core / pi-ai types ----
 export type {
-  AgentTool,
-  AgentEvent,
-  AgentMessage,
-  AgentOptions,
+	AgentEvent,
+	AgentMessage,
+	AgentOptions,
+	AgentTool,
+	StreamFn,
+	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-
 export type {
-  Model,
-  Api,
-  ImageContent,
-  Tool,
+	Api,
+	ImageContent,
+	Model,
+	Tool,
 } from "@earendil-works/pi-ai";
-
-export type {
-  StreamFn,
-  ThinkingLevel,
-} from "@earendil-works/pi-agent-core";
-
 // Re-export useful runtime functions from pi-ai
 export { getModel } from "@earendil-works/pi-ai";
+// ---- DO class factory (for advanced use) ----
+export { createAgentSessionDOClass } from "./agent-session-do.ts";
+export type { AgentWorkerExports } from "./factory.ts";
+// ---- Factory (primary API) ----
+export { createAgentWorker } from "./factory.ts";
+// ---- Protocol (for custom client implementations) ----
+export type { ClientMessage, ServerMessage } from "./protocol.ts";
+export { parseClientMessage, serializeServerMessage } from "./protocol.ts";
+// ---- Persistence (for advanced use) ----
+export {
+	deleteSession,
+	hasPersistedSession,
+	loadMessages,
+	saveMessages,
+} from "./session-persistence.ts";
+// ---- Types / DI interfaces ----
+export type {
+	AgentEnv,
+	AgentWorkerConfig,
+	SerializableAgentState,
+	SessionInfo,
+} from "./types.ts";
+// ---- Router factory (for advanced use) ----
+export { createWorkerHandler } from "./worker.ts";

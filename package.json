@@ -1,64 +1,68 @@
 {
-  "name": "pi-adapter-cf",
-  "version": "0.1.0",
-  "description": "Deploy pi-mono AI agents on Cloudflare Workers with Durable Objects. Dependency-injection friendly SDK.",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./stubs/ajv": "./stubs/ajv.js"
-  },
-  "files": [
-    "dist",
-    "stubs",
-    "README.md"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "dev": "wrangler dev example/src/index.ts --config example/wrangler.toml",
-    "deploy:example": "wrangler deploy --config example/wrangler.toml",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "npm run build && changeset publish"
-  },
-  "keywords": [
-    "cloudflare-workers",
-    "durable-objects",
-    "ai-agent",
-    "pi-mono",
-    "llm",
-    "websocket"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/arlyon/pi-adapter-cf.git"
-  },
-  "homepage": "https://github.com/arlyon/pi-adapter-cf#readme",
-  "bugs": {
-    "url": "https://github.com/arlyon/pi-adapter-cf/issues"
-  },
-  "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.75.3",
-    "@earendil-works/pi-ai": "^0.75.3"
-  },
-  "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
-    "@cloudflare/workers-types": "^4.20250214.0",
-    "typescript": "^5.7.0",
-    "wrangler": "^3.109.0"
-  },
-  "peerDependencies": {
-    "@cloudflare/workers-types": ">=4.0.0"
-  },
-  "overrides": {
-    "undici": "^6.21.0"
-  }
+	"name": "pi-adapter-cf",
+	"version": "0.1.0",
+	"description": "Deploy pi-mono AI agents on Cloudflare Workers with Durable Objects. Dependency-injection friendly SDK.",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./stubs/ajv": "./stubs/ajv.js"
+	},
+	"files": [
+		"dist",
+		"stubs",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "wrangler dev example/src/index.ts --config example/wrangler.toml",
+		"deploy:example": "wrangler deploy --config example/wrangler.toml",
+		"typecheck": "tsc --noEmit",
+		"clean": "rm -rf dist",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format --write .",
+		"changeset": "changeset",
+		"version-packages": "changeset version",
+		"release": "npm run build && changeset publish"
+	},
+	"keywords": [
+		"cloudflare-workers",
+		"durable-objects",
+		"ai-agent",
+		"pi-mono",
+		"llm",
+		"websocket"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/arlyon/pi-adapter-cf.git"
+	},
+	"homepage": "https://github.com/arlyon/pi-adapter-cf#readme",
+	"bugs": {
+		"url": "https://github.com/arlyon/pi-adapter-cf/issues"
+	},
+	"dependencies": {
+		"@earendil-works/pi-agent-core": "^0.75.3",
+		"@earendil-works/pi-ai": "^0.75.3"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.15",
+		"@changesets/changelog-github": "^0.7.0",
+		"@changesets/cli": "^2.31.0",
+		"@cloudflare/workers-types": "^4.20250214.0",
+		"typescript": "^5.7.0",
+		"wrangler": "^3.109.0"
+	},
+	"peerDependencies": {
+		"@cloudflare/workers-types": ">=4.0.0"
+	},
+	"overrides": {
+		"undici": "^6.21.0"
+	}
 }
