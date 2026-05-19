@@ -22,7 +22,10 @@
     "dev": "wrangler dev example/src/index.ts --config example/wrangler.toml",
     "deploy:example": "wrangler deploy --config example/wrangler.toml",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm run build && changeset publish"
   },
   "keywords": [
     "cloudflare-workers",
@@ -46,6 +49,8 @@
     "@earendil-works/pi-ai": "^0.75.3"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "@cloudflare/workers-types": "^4.20250214.0",
     "typescript": "^5.7.0",
     "wrangler": "^3.109.0"
