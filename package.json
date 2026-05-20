@@ -18,14 +18,19 @@
 		"README.md"
 	],
 	"scripts": {
-		"build": "tsc",
+		"postinstall": "patch-package",
+		"build": "tsgo",
 		"dev": "wrangler dev example/src/index.ts --config example/wrangler.toml",
 		"deploy:example": "wrangler deploy --config example/wrangler.toml",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest run",
+		"test:coverage": "vitest run --coverage",
+		"test:crap": "crap-typescript --test-runner vitest --format text src/",
 		"clean": "rm -rf dist",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
+		"format:check": "biome format .",
 		"release": "npm run build && npm publish --provenance --access public"
 	},
 	"keywords": [
@@ -50,9 +55,13 @@
 		"@earendil-works/pi-ai": "^0.75.3"
 	},
 	"devDependencies": {
+		"@barney-media/crap-typescript": "^0.3.0",
 		"@biomejs/biome": "^2.4.15",
 		"@cloudflare/workers-types": "^4.20250214.0",
-		"typescript": "^5.7.0",
+		"@typescript/native-preview": "^7.0.0-beta",
+		"@vitest/coverage-v8": "^4.1.6",
+		"patch-package": "^8.0.1",
+		"vitest": "^4.1.6",
 		"wrangler": "^3.109.0"
 	},
 	"peerDependencies": {

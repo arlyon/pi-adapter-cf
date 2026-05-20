@@ -1,0 +1,13 @@
+diff --git a/node_modules/ast-v8-to-istanbul/dist/index.mjs b/node_modules/ast-v8-to-istanbul/dist/index.mjs
+index 275ab12..344af1f 100644
+--- a/node_modules/ast-v8-to-istanbul/dist/index.mjs
++++ b/node_modules/ast-v8-to-istanbul/dist/index.mjs
+@@ -131,6 +131,8 @@ const skippedNodes = /* @__PURE__ */ new WeakSet();
+ function getFunctionName(node) {
+ 	if (node.type === "Identifier") return node.name;
+ 	if ("id" in node && node.id) return getFunctionName(node.id);
++	if ((node.type === "MethodDefinition" || node.type === "ClassMethod") && node.key) return getFunctionName(node.key);
++	if (node.type === "Property" && node.key) return getFunctionName(node.key);
+ }
+ function setSkipped(node) {
+ 	skippedNodes.add(node);
