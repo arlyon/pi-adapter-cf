@@ -10,6 +10,28 @@
 import type { AgentEnv, AgentWorkerConfig, SessionInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------
+// Session route table
+// ---------------------------------------------------------------------------
+
+interface SessionRoute {
+	action: string;
+	method: string;
+	forwardBody?: boolean;
+}
+
+const SESSION_ROUTES: SessionRoute[] = [
+	{ action: "state", method: "GET" },
+	{ action: "usage", method: "GET" },
+	{ action: "entries", method: "GET" },
+	{ action: "branch", method: "GET" },
+	{ action: "prompt", method: "POST", forwardBody: true },
+	{ action: "label", method: "POST", forwardBody: true },
+	{ action: "navigate", method: "POST", forwardBody: true },
+];
+
+const SESSION_PATH_RE = /^\/sessions\/([^/]+)(?:\/(\w+))?$/;
+
+// ---------------------------------------------------------------------------
 // Router factory
 // ---------------------------------------------------------------------------
 
@@ -22,12 +44,10 @@ export function createWorkerHandler<Env extends AgentEnv, Ctx = void>(
 			env: Env,
 			_ctx: ExecutionContext,
 		): Promise<Response> {
-			// ---- CORS preflight ----
 			if (request.method === "OPTIONS") {
 				return handleCors(request);
 			}
 
-			// ---- Authentication ----
 			if (config.authenticate) {
 				const allowed = await config.authenticate(request, env);
 				if (!allowed) {
@@ -35,142 +55,88 @@ export function createWorkerHandler<Env extends AgentEnv, Ctx = void>(
 				}
 			}
 
-			const url = new URL(request.url);
-			const path = url.pathname;
-
-			// ---- Routes ----
-
-			// POST /sessions — create a new session
-			if (request.method === "POST" && path === "/sessions") {
-				return cors(request, await handleCreateSession(env));
-			}
-
-			// GET /sessions/:id/ws — WebSocket upgrade → forward to DO
-			const wsMatch = path.match(/^\/sessions\/([^/]+)\/ws$/);
-			if (wsMatch && request.headers.get("Upgrade") === "websocket") {
-				const sessionId = wsMatch[1];
-				return forwardToDO(env, sessionId, request);
-			}
-
-			// GET /sessions/:id/state — REST state query
-			const stateMatch = path.match(/^\/sessions\/([^/]+)\/state$/);
-			if (stateMatch && request.method === "GET") {
-				const sessionId = stateMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL(`/state`, request.url), { method: "GET" }),
-				);
-				return cors(request, resp);
-			}
-
-			// GET /sessions/:id/usage — cumulative token usage
-			const usageMatch = path.match(/^\/sessions\/([^/]+)\/usage$/);
-			if (usageMatch && request.method === "GET") {
-				const sessionId = usageMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL("/usage", request.url), { method: "GET" }),
-				);
-				return cors(request, resp);
-			}
-
-			// POST /sessions/:id/prompt — REST prompt (fire-and-forget)
-			const promptMatch = path.match(/^\/sessions\/([^/]+)\/prompt$/);
-			if (promptMatch && request.method === "POST") {
-				const sessionId = promptMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL(`/prompt`, request.url), {
-						method: "POST",
-						body: request.body,
-						headers: request.headers,
-					}),
-				);
-				return cors(request, resp);
-			}
-
-			// GET /sessions/:id/entries — session tree entries
-			const entriesMatch = path.match(/^\/sessions\/([^/]+)\/entries$/);
-			if (entriesMatch && request.method === "GET") {
-				const sessionId = entriesMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL("/entries", request.url), { method: "GET" }),
-				);
-				return cors(request, resp);
-			}
-
-			// GET /sessions/:id/branch — current branch path
-			const branchMatch = path.match(/^\/sessions\/([^/]+)\/branch$/);
-			if (branchMatch && request.method === "GET") {
-				const sessionId = branchMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL("/branch", request.url), { method: "GET" }),
-				);
-				return cors(request, resp);
-			}
-
-			// POST /sessions/:id/label — add/remove label
-			const labelMatch = path.match(/^\/sessions\/([^/]+)\/label$/);
-			if (labelMatch && request.method === "POST") {
-				const sessionId = labelMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL("/label", request.url), {
-						method: "POST",
-						body: request.body,
-						headers: request.headers,
-					}),
-				);
-				return cors(request, resp);
-			}
-
-			// POST /sessions/:id/navigate — move to branch point
-			const navigateMatch = path.match(/^\/sessions\/([^/]+)\/navigate$/);
-			if (navigateMatch && request.method === "POST") {
-				const sessionId = navigateMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL("/navigate", request.url), {
-						method: "POST",
-						body: request.body,
-						headers: request.headers,
-					}),
-				);
-				return cors(request, resp);
-			}
-
-			// DELETE /sessions/:id — delete session
-			const deleteMatch = path.match(/^\/sessions\/([^/]+)$/);
-			if (deleteMatch && request.method === "DELETE") {
-				const sessionId = deleteMatch[1];
-				const resp = await forwardToDO(
-					env,
-					sessionId,
-					new Request(new URL(`/`, request.url), { method: "DELETE" }),
-				);
-				return cors(request, resp);
-			}
-
-			// GET /health
-			if (path === "/health" && request.method === "GET") {
-				return cors(
-					request,
-					Response.json({ ok: true, timestamp: Date.now() }),
-				);
-			}
-
-			return cors(request, new Response("Not found", { status: 404 }));
+			const resp = await routeRequest(request, env);
+			return resp;
 		},
 	};
+}
+
+// ---------------------------------------------------------------------------
+// Route dispatch
+// ---------------------------------------------------------------------------
+
+async function routeRequest<Env extends AgentEnv>(
+	request: Request,
+	env: Env,
+): Promise<Response> {
+	const path = new URL(request.url).pathname;
+
+	if (request.method === "POST" && path === "/sessions") {
+		return cors(request, await handleCreateSession(env));
+	}
+
+	if (path === "/health" && request.method === "GET") {
+		return cors(request, Response.json({ ok: true, timestamp: Date.now() }));
+	}
+
+	const match = path.match(SESSION_PATH_RE);
+	if (!match) {
+		return cors(request, new Response("Not found", { status: 404 }));
+	}
+
+	const resp = await routeSessionRequest(request, env, match[1], match[2]);
+	return cors(request, resp);
+}
+
+async function routeSessionRequest<Env extends AgentEnv>(
+	request: Request,
+	env: Env,
+	sessionId: string,
+	action: string | undefined,
+): Promise<Response> {
+	// WebSocket upgrade
+	if (action === "ws" && request.headers.get("Upgrade") === "websocket") {
+		return forwardToDO(env, sessionId, request);
+	}
+
+	// DELETE /sessions/:id
+	if (!action && request.method === "DELETE") {
+		return forwardToDO(
+			env,
+			sessionId,
+			new Request(new URL("/", request.url), { method: "DELETE" }),
+		);
+	}
+
+	// Table-driven session routes
+	const route = SESSION_ROUTES.find(
+		(r) => r.action === action && r.method === request.method,
+	);
+	if (!route) {
+		return new Response("Not found", { status: 404 });
+	}
+
+	return forwardToDO(
+		env,
+		sessionId,
+		buildDORequest(request, `/${action}`, route.forwardBody),
+	);
+}
+
+function buildDORequest(
+	request: Request,
+	doPath: string,
+	forwardBody?: boolean,
+): Request {
+	if (forwardBody) {
+		return new Request(new URL(doPath, request.url), {
+			method: request.method,
+			body: request.body,
+			headers: request.headers,
+			duplex: "half",
+		} as RequestInit);
+	}
+	return new Request(new URL(doPath, request.url), { method: "GET" });
 }
 
 // ---------------------------------------------------------------------------

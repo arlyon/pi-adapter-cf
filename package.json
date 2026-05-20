@@ -25,7 +25,7 @@
 		"typecheck": "tsgo --noEmit",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
-		"test:crap": "crap-typescript --test-runner vitest --format text src/",
+		"test:crap": "crap-typescript --test-runner vitest --threshold 30 --format text src/",
 		"clean": "rm -rf dist",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",

@@ -123,11 +123,8 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 		}
 
 		/** @internal */
-		_ensureAgent(ctx?: Ctx): Agent {
-			if (this._agent) return this._agent;
-
+		_buildAgentOptions(sessionCtx: Ctx | undefined, messages?: AgentMessage[]) {
 			const env = this._env;
-			const sessionCtx = ctx ?? this._sessionContext;
 			const systemPrompt =
 				typeof config.systemPrompt === "function"
 					? config.systemPrompt(env)
@@ -137,10 +134,11 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				? config.tools(env, sessionCtx as Ctx)
 				: [];
 
-			this._agent = new Agent({
+			return {
 				initialState: {
 					systemPrompt,
 					tools,
+					...(messages ? { messages } : {}),
 					...(config.model ? { model: config.model } : {}),
 					...(config.thinkingLevel
 						? { thinkingLevel: config.thinkingLevel }
@@ -149,9 +147,18 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				streamFn: config.streamFn,
 				transformContext: config.transformContext,
 				convertToLlm: config.convertToLlm,
-				getApiKey: (provider) => config.getApiKey(provider, env),
+				getApiKey: (provider: string) => config.getApiKey(provider, env),
 				sessionId: this._sessionId,
-			});
+			};
+		}
+
+		/** @internal */
+		_ensureAgent(ctx?: Ctx): Agent {
+			if (this._agent) return this._agent;
+
+			const env = this._env;
+			const sessionCtx = ctx ?? this._sessionContext;
+			this._agent = new Agent(this._buildAgentOptions(sessionCtx));
 
 			// Subscribe to events and broadcast to all connected WS clients
 			this._unsubscribe = this._agent.subscribe((event) => {
@@ -320,31 +327,9 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 			if (persisted.length === 0) return;
 			// Destroy current (empty) agent and recreate with persisted messages
 			this._destroyAgent();
-			const env = this._env;
-			const sessionCtx = this._sessionContext;
-			const systemPrompt =
-				typeof config.systemPrompt === "function"
-					? config.systemPrompt(env)
-					: config.systemPrompt;
-			const tools: AgentTool<any>[] = config.tools
-				? config.tools(env, sessionCtx as Ctx)
-				: [];
-			this._agent = new Agent({
-				initialState: {
-					systemPrompt,
-					tools,
-					messages: persisted,
-					...(config.model ? { model: config.model } : {}),
-					...(config.thinkingLevel
-						? { thinkingLevel: config.thinkingLevel }
-						: {}),
-				},
-				streamFn: config.streamFn,
-				transformContext: config.transformContext,
-				convertToLlm: config.convertToLlm,
-				getApiKey: (provider) => config.getApiKey(provider, env),
-				sessionId: this._sessionId,
-			});
+			this._agent = new Agent(
+				this._buildAgentOptions(this._sessionContext, persisted),
+			);
 		}
 
 		// -----------------------------------------------------------------
@@ -583,6 +568,74 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 		// -----------------------------------------------------------------
 
 		/** @internal */
+		_handleSetModel(
+			ws: WebSocket,
+			agent: Agent,
+			msg: ClientMessage & { type: "set_model" },
+		): void {
+			try {
+				const model = getModel(msg.provider as any, msg.modelId as any);
+				if (model) {
+					agent.state.model = model;
+				} else {
+					this._sendTo(ws, {
+						type: "error",
+						message: `Unknown model: ${msg.provider}/${msg.modelId}`,
+						code: "UNKNOWN_MODEL",
+					});
+				}
+			} catch {
+				this._sendTo(ws, {
+					type: "error",
+					message: `Unknown model: ${msg.provider}/${msg.modelId}`,
+					code: "UNKNOWN_MODEL",
+				});
+			}
+		}
+
+		/** @internal */
+		async _handleClearMessages(agent: Agent): Promise<void> {
+			agent.state.messages = [];
+			this._session = null;
+			const storage = await DOSessionStorage.open(this._ctx.storage);
+			if (storage) await storage.deleteAll();
+			await DOSessionStorage.create(this._ctx.storage, this._sessionId);
+		}
+
+		/** @internal */
+		async _handleReset(agent: Agent): Promise<void> {
+			agent.reset();
+			this._session = null;
+			const storage = await DOSessionStorage.open(this._ctx.storage);
+			if (storage) await storage.deleteAll();
+			else await this._ctx.storage.deleteAll();
+		}
+
+		/** @internal */
+		async _handleRestore(ws: WebSocket, agent: Agent): Promise<void> {
+			const messages = await this._loadMessagesFromSession();
+			if (messages.length > 0) {
+				agent.state.messages = messages;
+			}
+			this._sendTo(ws, { type: "restored", messages });
+		}
+
+		/** @internal */
+		async _handleNavigate(
+			ws: WebSocket,
+			msg: ClientMessage & { type: "navigate" },
+		): Promise<void> {
+			const session = await this._ensureSession();
+			await session.moveTo(
+				msg.entryId,
+				msg.summary ? { summary: msg.summary } : undefined,
+			);
+			this._destroyAgent();
+			await this._hydrateFromStorageIfNeeded();
+			this._sendTo(ws, { type: "state", state: this._getSerializableState() });
+		}
+
+		/** @internal */
 		async _handleClientMessage(
 			ws: WebSocket,
 			msg: ClientMessage,
@@ -593,119 +646,63 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				case "prompt":
 					await agent.prompt(msg.text, msg.images);
 					break;
-
 				case "steer":
 					agent.steer(msg.message);
 					break;
-
 				case "follow_up":
 					agent.followUp(msg.message);
 					break;
-
 				case "abort":
 					agent.abort();
 					break;
-
 				case "get_state":
 					this._sendTo(ws, {
 						type: "state",
 						state: this._getSerializableState(),
 					});
 					break;
-
-				case "set_model": {
-					// getModel requires KnownProvider — cast since user may send any string
-					try {
-						const model = getModel(msg.provider as any, msg.modelId as any);
-						if (model) {
-							agent.state.model = model;
-						} else {
-							this._sendTo(ws, {
-								type: "error",
-								message: `Unknown model: ${msg.provider}/${msg.modelId}`,
-								code: "UNKNOWN_MODEL",
-							});
-						}
-					} catch {
-						this._sendTo(ws, {
-							type: "error",
-							message: `Unknown model: ${msg.provider}/${msg.modelId}`,
-							code: "UNKNOWN_MODEL",
-						});
-					}
+				case "set_model":
+					this._handleSetModel(ws, agent, msg);
 					break;
-				}
-
 				case "set_thinking_level":
 					agent.state.thinkingLevel = msg.level;
 					break;
-
-				case "clear_messages": {
-					agent.state.messages = [];
-					// Reset session tree
-					this._session = null;
-					const storage = await DOSessionStorage.open(this._ctx.storage);
-					if (storage) await storage.deleteAll();
-					await DOSessionStorage.create(this._ctx.storage, this._sessionId);
+				case "clear_messages":
+					await this._handleClearMessages(agent);
 					break;
-				}
-
-				case "reset": {
-					agent.reset();
-					this._session = null;
-					const resetStorage = await DOSessionStorage.open(this._ctx.storage);
-					if (resetStorage) await resetStorage.deleteAll();
-					else await this._ctx.storage.deleteAll();
+				case "reset":
+					await this._handleReset(agent);
 					break;
-				}
-
-				case "restore": {
-					const messages = await this._loadMessagesFromSession();
-					if (messages.length > 0) {
-						agent.state.messages = messages;
-					}
-					this._sendTo(ws, { type: "restored", messages });
+				case "restore":
+					await this._handleRestore(ws, agent);
 					break;
-				}
-
 				case "get_entries": {
 					const session = await this._ensureSession();
-					const entries = await session.getEntries();
-					this._sendTo(ws, { type: "entries", entries });
+					this._sendTo(ws, {
+						type: "entries",
+						entries: await session.getEntries(),
+					});
 					break;
 				}
-
 				case "get_branch": {
 					const session = await this._ensureSession();
-					const branch = await session.getBranch();
-					this._sendTo(ws, { type: "branch", entries: branch });
+					this._sendTo(ws, {
+						type: "branch",
+						entries: await session.getBranch(),
+					});
 					break;
 				}
-
 				case "label": {
 					const session = await this._ensureSession();
 					await session.appendLabel(msg.targetId, msg.label);
 					break;
 				}
-
-				case "navigate": {
-					const session = await this._ensureSession();
-					await session.moveTo(
-						msg.entryId,
-						msg.summary ? { summary: msg.summary } : undefined,
-					);
-					// Reload agent with new branch context
-					this._destroyAgent();
-					await this._hydrateFromStorageIfNeeded();
-					const newState = this._getSerializableState();
-					this._sendTo(ws, { type: "state", state: newState });
+				case "navigate":
+					await this._handleNavigate(ws, msg);
 					break;
-				}
-
 				case "ping":
 					this._sendTo(ws, { type: "pong" });
 					break;
-
 				default:
 					this._sendTo(ws, {
 						type: "error",
