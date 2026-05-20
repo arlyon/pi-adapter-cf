@@ -1,0 +1,13 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      run: pnpm lint:fix
+      stage_fixed: true
+
+    - name: format
+      run: pnpm format
+      stage_fixed: true
+
+    - name: typecheck
+      run: pnpm typecheck

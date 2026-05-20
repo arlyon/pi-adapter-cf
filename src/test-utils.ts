@@ -5,6 +5,8 @@
 export class MockDurableObjectStorage {
 	private data = new Map<string, unknown>();
 
+	async get<T = unknown>(key: string): Promise<T | undefined>;
+	async get<T = unknown>(keys: string[]): Promise<Map<string, T>>;
 	async get<T = unknown>(
 		keyOrKeys: string | string[],
 	): Promise<T | Map<string, T> | undefined> {
@@ -16,7 +18,7 @@ export class MockDurableObjectStorage {
 					result.set(key, value as T);
 				}
 			}
-			return result as Map<string, T>;
+			return result;
 		}
 		return this.data.get(keyOrKeys) as T | undefined;
 	}

@@ -1,8 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { describe, expect, it, vi } from "vitest";
 import { createAgentSessionDOClass } from "./agent-session-do.ts";
-import type { AgentEnv, AgentWorkerConfig, SessionUsage } from "./types.ts";
 import { MockDurableObjectStorage } from "./test-utils.ts";
+import type { AgentEnv, AgentWorkerConfig } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Globals that exist in the CF Workers runtime but not in Node
@@ -32,10 +31,12 @@ class MockWebSocket {
 };
 
 (globalThis as any).WebSocketRequestResponsePair = class {
-	constructor(
-		public request: string,
-		public response: string,
-	) {}
+	request: string;
+	response: string;
+	constructor(request: string, response: string) {
+		this.request = request;
+		this.response = response;
+	}
 };
 
 // ---------------------------------------------------------------------------
@@ -104,7 +105,7 @@ describe("AgentSessionDO.fetch", () => {
 			new Request("http://do/usage", { method: "GET" }),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.turnCount).toBe(0);
 		expect(body.totalTokens).toBe(0);
 	});
@@ -115,7 +116,7 @@ describe("AgentSessionDO.fetch", () => {
 			new Request("http://do/state", { method: "GET" }),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.systemPrompt).toBe("test assistant");
 		expect(body.isStreaming).toBe(false);
 		expect(Array.isArray(body.messages)).toBe(true);
@@ -128,7 +129,7 @@ describe("AgentSessionDO.fetch", () => {
 			new Request("http://do/entries", { method: "GET" }),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(Array.isArray(body)).toBe(true);
 	});
 
@@ -138,7 +139,7 @@ describe("AgentSessionDO.fetch", () => {
 			new Request("http://do/branch", { method: "GET" }),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(Array.isArray(body)).toBe(true);
 	});
 
@@ -164,7 +165,7 @@ describe("AgentSessionDO.fetch", () => {
 			}),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.ok).toBe(true);
 		expect(body.sessionId).toBe("test-do-id");
 	});
@@ -178,7 +179,7 @@ describe("AgentSessionDO.fetch", () => {
 			}),
 		);
 		expect(resp.status).toBe(400);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.error).toBeTruthy();
 	});
 
@@ -212,7 +213,7 @@ describe("AgentSessionDO.fetch", () => {
 				body: JSON.stringify({ targetId: "entry-1", label: "bookmarked" }),
 			}),
 		);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		// If the Session implementation requires an existing entry, we expect 400
 		if (resp.status === 400) {
 			expect(body.error).toBeTruthy();
@@ -232,7 +233,7 @@ describe("AgentSessionDO.fetch", () => {
 			}),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.ok).toBe(true);
 	});
 
@@ -246,7 +247,7 @@ describe("AgentSessionDO.fetch", () => {
 			}),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.ok).toBe(true);
 	});
 
@@ -494,9 +495,8 @@ describe("AgentSessionDO.webSocketMessage", () => {
 	it("handles ArrayBuffer input", async () => {
 		const { instance } = createDO();
 		const ws = new MockWebSocket();
-		const buf = new TextEncoder().encode(
-			JSON.stringify({ type: "ping" }),
-		).buffer;
+		const buf = new TextEncoder().encode(JSON.stringify({ type: "ping" }))
+			.buffer as ArrayBuffer;
 		await instance.webSocketMessage(ws as unknown as WebSocket, buf);
 		const msgs = parseSent(ws);
 		expect(msgs).toContainEqual({ type: "pong" });
@@ -512,7 +512,7 @@ describe("AgentSessionDO.webSocketMessage", () => {
 		);
 		// Should get an error response, not crash
 		const msgs = parseSent(ws);
-		const hasError = msgs.some((m) => m.type === "error");
+		const _hasError = msgs.some((m) => m.type === "error");
 		// May or may not error depending on Agent.steer implementation
 		expect(msgs.length).toBeGreaterThanOrEqual(0);
 	});
@@ -527,7 +527,12 @@ describe("AgentSessionDO WebSocket lifecycle", () => {
 		const { instance, ctx } = createDO();
 		const setAlarmSpy = vi.spyOn(ctx.storage, "setAlarm" as any);
 		const ws = new MockWebSocket();
-		await instance.webSocketClose(ws as unknown as WebSocket, 1000, "bye", true);
+		await instance.webSocketClose(
+			ws as unknown as WebSocket,
+			1000,
+			"bye",
+			true,
+		);
 		expect(ws.closedWith).toEqual({ code: 1000, reason: "bye" });
 		// No more sockets → schedules idle alarm
 		expect(setAlarmSpy).toHaveBeenCalled();
@@ -552,9 +557,7 @@ describe("AgentSessionDO.alarm", () => {
 	it("destroys agent when no sockets connected", async () => {
 		const { instance } = createDO();
 		// Ensure agent is created
-		await instance.fetch(
-			new Request("http://do/state", { method: "GET" }),
-		);
+		await instance.fetch(new Request("http://do/state", { method: "GET" }));
 		expect(instance._agent).not.toBeNull();
 
 		await instance.alarm();
@@ -589,7 +592,13 @@ describe("AgentSessionDO._accumulateUsage", () => {
 			cacheRead: 10,
 			cacheWrite: 5,
 			totalTokens: 165,
-			cost: { input: 0.01, output: 0.02, cacheRead: 0.001, cacheWrite: 0.0005, total: 0.0315 },
+			cost: {
+				input: 0.01,
+				output: 0.02,
+				cacheRead: 0.001,
+				cacheWrite: 0.0005,
+				total: 0.0315,
+			},
 		};
 
 		const usage2 = {
@@ -598,7 +607,13 @@ describe("AgentSessionDO._accumulateUsage", () => {
 			cacheRead: 20,
 			cacheWrite: 8,
 			totalTokens: 308,
-			cost: { input: 0.02, output: 0.04, cacheRead: 0.002, cacheWrite: 0.001, total: 0.063 },
+			cost: {
+				input: 0.02,
+				output: 0.04,
+				cacheRead: 0.002,
+				cacheWrite: 0.001,
+				total: 0.063,
+			},
 		};
 
 		instance._accumulateUsage(usage1 as any);
@@ -693,7 +708,7 @@ describe("AgentSessionDO agent lifecycle", () => {
 		} as any);
 		const state = instance._getSerializableState();
 		expect(state.usage).toBeTruthy();
-		expect(state.usage!.turnCount).toBe(1);
+		expect(state.usage?.turnCount).toBe(1);
 	});
 
 	it("_getSerializableState omits usage when turnCount is 0", () => {
@@ -740,10 +755,7 @@ describe("AgentSessionDO broadcast", () => {
 		ctx.acceptWebSocket(ws1 as unknown as WebSocket);
 		ctx.acceptWebSocket(ws2 as unknown as WebSocket);
 
-		instance._sendTo(
-			ws1 as unknown as WebSocket,
-			{ type: "pong" },
-		);
+		instance._sendTo(ws1 as unknown as WebSocket, { type: "pong" });
 
 		expect(parseSent(ws1)).toEqual([{ type: "pong" }]);
 		expect(parseSent(ws2)).toEqual([]);
@@ -830,7 +842,7 @@ describe("AgentSessionDO session persistence", () => {
 		await instance._hydrateFromStorageIfNeeded();
 		// Agent should be created with empty messages
 		expect(instance._agent).not.toBeNull();
-		expect(instance._agent!.state.messages.length).toBe(0);
+		expect(instance._agent?.state.messages.length).toBe(0);
 	});
 });
 

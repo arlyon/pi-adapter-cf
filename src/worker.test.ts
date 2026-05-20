@@ -7,8 +7,7 @@ import { createWorkerHandler } from "./worker.ts";
 // ---------------------------------------------------------------------------
 
 function mockEnv(fetchImpl?: (req: Request) => Promise<Response>): AgentEnv {
-	const doFetch =
-		fetchImpl ?? (async () => Response.json({ forwarded: true }));
+	const doFetch = fetchImpl ?? (async () => Response.json({ forwarded: true }));
 	const fakeId = {
 		toString: () => "fake-do-id",
 	};
@@ -76,7 +75,7 @@ describe("health endpoint", () => {
 			mockCtx(),
 		);
 		expect(resp.status).toBe(200);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(body.ok).toBe(true);
 		expect(typeof body.timestamp).toBe("number");
 	});
@@ -127,7 +126,7 @@ describe("session creation", () => {
 			mockCtx(),
 		);
 		expect(resp.status).toBe(201);
-		const body = await resp.json();
+		const body = (await resp.json()) as any;
 		expect(typeof body.sessionId).toBe("string");
 		expect(typeof body.createdAt).toBe("number");
 	});

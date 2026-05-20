@@ -60,6 +60,7 @@
 		"@cloudflare/workers-types": "^4.20250214.0",
 		"@typescript/native-preview": "^7.0.0-beta",
 		"@vitest/coverage-v8": "^4.1.6",
+		"lefthook": "^2.1.8",
 		"patch-package": "^8.0.1",
 		"vitest": "^4.1.6",
 		"wrangler": "^3.109.0"

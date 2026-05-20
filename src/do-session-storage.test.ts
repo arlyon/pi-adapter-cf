@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
 import type { SessionTreeEntry } from "@earendil-works/pi-agent-core";
+import { beforeEach, describe, expect, it } from "vitest";
 import { DOSessionStorage } from "./do-session-storage.ts";
 import { MockDurableObjectStorage } from "./test-utils.ts";
 
@@ -32,8 +32,9 @@ function makeMessageEntry(
 		id,
 		type: "message",
 		parentId,
+		timestamp: Date.now(),
 		message: { role: "assistant", content: "hello" },
-	} as SessionTreeEntry;
+	} as unknown as SessionTreeEntry;
 }
 
 describe("DOSessionStorage.create + open", () => {
@@ -50,8 +51,9 @@ describe("DOSessionStorage.create + open", () => {
 		expect(meta.createdAt).toBeTruthy();
 
 		const reopened = await DOSessionStorage.open(castStorage(storage));
-		expect(reopened).toBeTruthy();
-		const meta2 = await reopened!.getMetadata();
+		expect(reopened).not.toBeNull();
+		if (reopened === null) throw new Error("unreachable");
+		const meta2 = await reopened.getMetadata();
 		expect(meta2.id).toBe("sess-1");
 	});
 

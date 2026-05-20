@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
 	deleteSession,
 	hasPersistedSession,
@@ -9,13 +9,13 @@ import {
 import { MockDurableObjectStorage } from "./test-utils.ts";
 
 function makeMsg(text: string): AgentMessage {
-	return { role: "assistant", content: text } as AgentMessage;
+	return { role: "assistant", content: text } as unknown as AgentMessage;
 }
 
 /** Create a message whose JSON is roughly `byteSize` bytes. */
 function makeLargeMsg(byteSize: number): AgentMessage {
 	const padding = "x".repeat(Math.max(0, byteSize - 30));
-	return { role: "assistant", content: padding } as AgentMessage;
+	return { role: "assistant", content: padding } as unknown as AgentMessage;
 }
 
 describe("hasPersistedSession", () => {
@@ -106,8 +106,8 @@ describe("saveMessages + loadMessages", () => {
 			messageCount: number;
 		}>("meta");
 		expect(meta).toBeTruthy();
-		expect(meta!.chunkCount).toBeGreaterThan(1);
-		expect(meta!.messageCount).toBe(3);
+		expect(meta?.chunkCount).toBeGreaterThan(1);
+		expect(meta?.messageCount).toBe(3);
 
 		// Round-trip should still work
 		const loaded = await loadMessages(
@@ -125,17 +125,17 @@ describe("saveMessages + loadMessages", () => {
 		];
 		await saveMessages(storage as unknown as DurableObjectStorage, largeMsgs);
 		const meta1 = await storage.get<{ chunkCount: number }>("meta");
-		const oldChunkCount = meta1?.chunkCount;
+		const oldChunkCount = meta1?.chunkCount ?? 0;
 
 		// Second save: fewer messages → fewer chunks
 		await saveMessages(storage as unknown as DurableObjectStorage, [
 			makeMsg("small"),
 		]);
 		const meta2 = await storage.get<{ chunkCount: number }>("meta");
-		expect(meta2!.chunkCount).toBeLessThan(oldChunkCount!);
+		expect(meta2?.chunkCount).toBeLessThan(oldChunkCount);
 
 		// Old chunk keys should be gone
-		for (let i = meta2!.chunkCount; i < oldChunkCount!; i++) {
+		for (let i = meta2?.chunkCount ?? 0; i < oldChunkCount; i++) {
 			const val = await storage.get(`msgs:${i}`);
 			expect(val).toBeUndefined();
 		}
