@@ -844,6 +844,26 @@ describe("AgentSessionDO session persistence", () => {
 		expect(instance._agent).not.toBeNull();
 		expect(instance._agent?.state.messages.length).toBe(0);
 	});
+
+	// Regression: persisted messages must survive a fresh load. This is the
+	// exact production path — every HTTP /prompt destroys the in-memory agent
+	// and rehydrates from storage via _loadMessagesFromSession. If the leaf
+	// pointer is not advanced on append, this returns [] and conversation
+	// history is lost on every turn.
+	it("persisted messages are returned by a subsequent _loadMessagesFromSession", async () => {
+		const storage = new MockDurableObjectStorage();
+		const first = createDO({}, storage);
+		await first.instance._persistMessages([
+			{ role: "user", content: [{ type: "text", text: "hello" }] },
+			{ role: "assistant", content: [{ type: "text", text: "hi there" }] },
+		] as unknown as Parameters<typeof first.instance._persistMessages>[0]);
+
+		// Simulate a brand-new DO instance over the SAME storage (as happens
+		// between Telegram messages when the DO is evicted/recreated).
+		const second = createDO({}, storage);
+		const loaded = await second.instance._loadMessagesFromSession();
+		expect(loaded.map((m) => m.role)).toEqual(["user", "assistant"]);
+	});
 });
 
 // ---------------------------------------------------------------------------

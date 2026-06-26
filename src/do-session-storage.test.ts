@@ -1,4 +1,4 @@
-import type { SessionTreeEntry } from "@earendil-works/pi-agent-core";
+import { Session, type SessionTreeEntry } from "@earendil-works/pi-agent-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DOSessionStorage } from "./do-session-storage.ts";
 import { MockDurableObjectStorage } from "./test-utils.ts";
@@ -182,5 +182,162 @@ describe("DOSessionStorage.deleteAll", () => {
 
 		await ss.deleteAll();
 		expect(storage._raw.size).toBe(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Regression: appending content entries must advance the leaf pointer.
+//
+// `Session.appendMessage` sets a new message's `parentId` to the CURRENT leaf
+// and relies on the storage to advance the leaf to the appended entry. Today
+// `appendEntry` only moves the leaf for `type: "leaf"` entries, so message
+// entries never become the leaf: `getLeafId()` stays null, every message is
+// orphaned at the root, and `getPathToRoot`/`buildContext` return nothing —
+// i.e. conversation history is silently lost on reload.
+// ---------------------------------------------------------------------------
+describe("DOSessionStorage leaf advancement (history regression)", () => {
+	let storage: MockDurableObjectStorage;
+	let ss: DOSessionStorage;
+
+	beforeEach(async () => {
+		storage = new MockDurableObjectStorage();
+		ss = await DOSessionStorage.create(castStorage(storage), "sess-1");
+	});
+
+	it("appending a message entry advances the leaf to that entry", async () => {
+		await ss.appendEntry(makeMessageEntry("m1", null));
+		expect(await ss.getLeafId()).toBe("m1");
+	});
+
+	it("appended messages chain via parentId and are reconstructable from the leaf", async () => {
+		// Mirror exactly what Session.appendMessage does: parentId = current leaf.
+		await ss.appendEntry(makeMessageEntry("m1", await ss.getLeafId()));
+		await ss.appendEntry(makeMessageEntry("m2", await ss.getLeafId()));
+		await ss.appendEntry(makeMessageEntry("m3", await ss.getLeafId()));
+
+		const path = await ss.getPathToRoot(await ss.getLeafId());
+		expect(path.map((e) => e.id)).toEqual(["m1", "m2", "m3"]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Regression (integration): a real pi-agent-core Session over DOSessionStorage
+// must round-trip appended messages through buildContext(). This is the exact
+// path the Durable Object uses (_persistMessages -> appendMessage, then
+// _loadMessagesFromSession -> buildContext).
+// ---------------------------------------------------------------------------
+describe("Session over DOSessionStorage round-trip (history regression)", () => {
+	it("buildContext returns messages previously appended via the Session", async () => {
+		const storage = new MockDurableObjectStorage();
+		const ss = await DOSessionStorage.create(castStorage(storage), "sess-1");
+		const session = new Session(ss);
+
+		await session.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "remember the number 42" }],
+		} as Parameters<Session["appendMessage"]>[0]);
+		await session.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "got it" }],
+		} as Parameters<Session["appendMessage"]>[0]);
+
+		const ctx = await session.buildContext();
+		expect(ctx.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Caching invariants.
+//
+// LLM prompt caching (e.g. DeepSeek context caching) only produces cache hits
+// when each turn sends a prefix that is byte-identical to the previous turn's
+// prefix. For that to hold, the session history must be:
+//   1. append-only — earlier entries are never mutated, and
+//   2. reconstructed deterministically — the same call yields the same order,
+// so the reconstructed history after turn N is an exact prefix of the history
+// after turn N+1. These tests pin those invariants.
+// ---------------------------------------------------------------------------
+describe("DOSessionStorage caching invariants (stable prompt prefix)", () => {
+	let storage: MockDurableObjectStorage;
+	let ss: DOSessionStorage;
+
+	beforeEach(async () => {
+		storage = new MockDurableObjectStorage();
+		ss = await DOSessionStorage.create(castStorage(storage), "sess-1");
+	});
+
+	// This invariant holds today and must keep holding: appending new turns
+	// must never rewrite an earlier entry, or the cached prefix is invalidated.
+	it("appending later entries never mutates an earlier entry (append-only)", async () => {
+		await ss.appendEntry(makeMessageEntry("m1", null));
+		const snapshot = JSON.stringify(await ss.getEntry("m1"));
+
+		await ss.appendEntry(makeMessageEntry("m2", "m1"));
+		await ss.appendEntry(makeMessageEntry("m3", "m2"));
+
+		expect(JSON.stringify(await ss.getEntry("m1"))).toBe(snapshot);
+	});
+
+	it("reconstructs the same history deterministically on repeated reads", async () => {
+		await ss.appendEntry(makeMessageEntry("m1", await ss.getLeafId()));
+		await ss.appendEntry(makeMessageEntry("m2", await ss.getLeafId()));
+
+		const first = (await ss.getPathToRoot(await ss.getLeafId())).map(
+			(e) => e.id,
+		);
+		const second = (await ss.getPathToRoot(await ss.getLeafId())).map(
+			(e) => e.id,
+		);
+
+		expect(second).toEqual(first);
+		expect(first).toEqual(["m1", "m2"]);
+	});
+
+	it("history after each turn is an exact prefix of the history after the next turn", async () => {
+		// Turn 1
+		await ss.appendEntry(makeMessageEntry("u1", await ss.getLeafId()));
+		await ss.appendEntry(makeMessageEntry("a1", await ss.getLeafId()));
+		const afterTurn1 = (await ss.getPathToRoot(await ss.getLeafId())).map(
+			(e) => e.id,
+		);
+
+		// Turn 2
+		await ss.appendEntry(makeMessageEntry("u2", await ss.getLeafId()));
+		await ss.appendEntry(makeMessageEntry("a2", await ss.getLeafId()));
+		const afterTurn2 = (await ss.getPathToRoot(await ss.getLeafId())).map(
+			(e) => e.id,
+		);
+
+		// The earlier history must be the exact leading slice of the later one —
+		// this is precisely the prefix a prompt cache reuses.
+		expect(afterTurn2.slice(0, afterTurn1.length)).toEqual(afterTurn1);
+		expect(afterTurn1).toEqual(["u1", "a1"]);
+		expect(afterTurn2).toEqual(["u1", "a1", "u2", "a2"]);
+	});
+
+	it("Session message objects grow as a stable prefix (cacheable across turns)", async () => {
+		const session = new Session(ss);
+		const msg = (role: string, text: string) =>
+			({ role, content: [{ type: "text", text }] }) as Parameters<
+				Session["appendMessage"]
+			>[0];
+
+		await session.appendMessage(msg("user", "first question"));
+		const ctxTurn1 = await session.buildContext();
+
+		await session.appendMessage(msg("assistant", "first answer"));
+		await session.appendMessage(msg("user", "second question"));
+		const ctxTurn2 = await session.buildContext();
+
+		// The messages already sent last turn must reappear identically (same
+		// order AND same content) at the head of this turn's context.
+		expect(ctxTurn2.messages.slice(0, ctxTurn1.messages.length)).toEqual(
+			ctxTurn1.messages,
+		);
+		expect(ctxTurn2.messages.map((m) => m.role)).toEqual([
+			"user",
+			"assistant",
+			"user",
+		]);
 	});
 });

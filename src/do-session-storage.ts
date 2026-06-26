@@ -106,9 +106,19 @@ export class DOSessionStorage implements SessionStorage<SessionMetadata> {
 			}
 		}
 
-		// If it's a leaf entry, update the leaf pointer
+		// Advance the leaf pointer.
+		//
+		// A `leaf` entry explicitly repositions the leaf to its target (used by
+		// navigation/branching). Every other content entry (message, model_change,
+		// thinking_level_change, …) is appended with `parentId = currentLeaf` and
+		// must itself become the new leaf, so the parent chain stays connected and
+		// `getPathToRoot(leafId)` can reconstruct the conversation. Without this,
+		// content entries are orphaned at the root and history is lost on reload.
+		// `label` entries are metadata and never move the leaf.
 		if (entry.type === "leaf") {
 			puts[KEY_LEAF] = entry.targetId;
+		} else if (entry.type !== "label") {
+			puts[KEY_LEAF] = entry.id;
 		}
 
 		await this.storage.put(puts);
