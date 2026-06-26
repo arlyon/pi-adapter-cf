@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/arlyon/pi-adapter-cf/compare/pi-adapter-cf-v0.1.1...pi-adapter-cf-v0.1.2) (2026-06-26)
+
+
+### Bug Fixes
+
+* **storage:** advance leaf pointer when appending content entries ([0dd63dc](https://github.com/arlyon/pi-adapter-cf/commit/0dd63dc0b080347b623379612d1ed83381dc9e76))
+
 ## [0.1.1](https://github.com/arlyon/pi-adapter-cf/compare/pi-adapter-cf-v0.1.0...pi-adapter-cf-v0.1.1) (2026-05-20)
 
 
