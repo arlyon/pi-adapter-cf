@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/arlyon/pi-adapter-cf/compare/pi-adapter-cf-v0.1.2...pi-adapter-cf-v0.1.3) (2026-07-17)
+
+
+### Bug Fixes
+
+* preserve event subscriptions after session hydration ([21d4107](https://github.com/arlyon/pi-adapter-cf/commit/21d4107e4595c48d83114d62ddad3718a811e01e))
+
 ## [0.1.2](https://github.com/arlyon/pi-adapter-cf/compare/pi-adapter-cf-v0.1.1...pi-adapter-cf-v0.1.2) (2026-06-26)
 
 
