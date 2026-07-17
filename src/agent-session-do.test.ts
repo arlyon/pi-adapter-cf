@@ -1,3 +1,7 @@
+import {
+	createAssistantMessageEventStream,
+	fauxAssistantMessage,
+} from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import { createAgentSessionDOClass } from "./agent-session-do.ts";
 import { MockDurableObjectStorage } from "./test-utils.ts";
@@ -863,6 +867,55 @@ describe("AgentSessionDO session persistence", () => {
 		const second = createDO({}, storage);
 		const loaded = await second.instance._loadMessagesFromSession();
 		expect(loaded.map((m) => m.role)).toEqual(["user", "assistant"]);
+	});
+
+	it("delivers agent events after hydrating persisted messages on a cold session", async () => {
+		const storage = new MockDurableObjectStorage();
+		const first = createDO({}, storage);
+		await first.instance._persistMessages([
+			{ role: "user", content: [{ type: "text", text: "remember this" }] },
+		] as unknown as Parameters<typeof first.instance._persistMessages>[0]);
+
+		const hookEventTypes: string[] = [];
+		const streamFn = vi.fn(() => {
+			const stream = createAssistantMessageEventStream();
+			const message = fauxAssistantMessage("done");
+			stream.push({ type: "start", partial: message });
+			stream.push({ type: "done", reason: "stop", message });
+			return stream;
+		});
+		const second = createDO(
+			{
+				streamFn,
+				onEvent: (_sessionId, event) => {
+					hookEventTypes.push(event.type);
+				},
+			},
+			storage,
+		);
+		const ws = new MockWebSocket();
+		second.ctx.acceptWebSocket(ws as unknown as WebSocket);
+
+		const stateResponse = await second.instance.fetch(
+			new Request("http://do/state", { method: "GET" }),
+		);
+		const state = (await stateResponse.json()) as { messages: unknown[] };
+		expect(state.messages).toHaveLength(1);
+
+		await second.instance.webSocketMessage(
+			ws as unknown as WebSocket,
+			JSON.stringify({ type: "prompt", text: "continue" }),
+		);
+
+		expect(streamFn).toHaveBeenCalledOnce();
+		expect(hookEventTypes.filter((type) => type === "agent_end")).toHaveLength(
+			1,
+		);
+		const broadcastAgentEnds = parseSent(ws).filter(
+			(message) =>
+				message.type === "event" && message.event.type === "agent_end",
+		);
+		expect(broadcastAgentEnds).toHaveLength(1);
 	});
 });
 

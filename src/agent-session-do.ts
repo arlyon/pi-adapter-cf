@@ -153,12 +153,12 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 		}
 
 		/** @internal */
-		_ensureAgent(ctx?: Ctx): Agent {
+		_ensureAgent(ctx?: Ctx, messages?: AgentMessage[]): Agent {
 			if (this._agent) return this._agent;
 
 			const env = this._env;
 			const sessionCtx = ctx ?? this._sessionContext;
-			this._agent = new Agent(this._buildAgentOptions(sessionCtx));
+			this._agent = new Agent(this._buildAgentOptions(sessionCtx, messages));
 
 			// Subscribe to events and broadcast to all connected WS clients
 			this._unsubscribe = this._agent.subscribe((event) => {
@@ -327,9 +327,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 			if (persisted.length === 0) return;
 			// Destroy current (empty) agent and recreate with persisted messages
 			this._destroyAgent();
-			this._agent = new Agent(
-				this._buildAgentOptions(this._sessionContext, persisted),
-			);
+			this._ensureAgent(this._sessionContext, persisted);
 		}
 
 		// -----------------------------------------------------------------
