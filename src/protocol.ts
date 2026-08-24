@@ -7,10 +7,10 @@
 import type {
 	AgentEvent,
 	AgentMessage,
-	SessionTreeEntry,
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type { ImageContent } from "@earendil-works/pi-ai";
+import type { SessionTreeEntry } from "./session-tree.ts";
 import type { SerializableAgentState, SessionUsage } from "./types.ts";
 
 // ---------------------------------------------------------------------------

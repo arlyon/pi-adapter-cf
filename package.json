@@ -51,8 +51,8 @@
 		"url": "https://github.com/arlyon/pi-adapter-cf/issues"
 	},
 	"dependencies": {
-		"@earendil-works/pi-agent-core": "^0.75.3",
-		"@earendil-works/pi-ai": "^0.75.3"
+		"@earendil-works/pi-agent-core": "0.84.2",
+		"@earendil-works/pi-ai": "0.84.2"
 	},
 	"devDependencies": {
 		"@barney-media/crap-typescript": "^0.3.0",
