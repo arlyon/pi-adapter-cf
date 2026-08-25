@@ -21,21 +21,17 @@ export type {
 	AgentMessage,
 	AgentOptions,
 	AgentTool,
-	SessionMetadata,
-	SessionStorage,
-	SessionTreeEntry,
 	StreamFn,
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-export { Session } from "@earendil-works/pi-agent-core";
 export type {
 	Api,
 	ImageContent,
 	Model,
 	Tool,
 } from "@earendil-works/pi-ai";
-// Re-export useful runtime functions from pi-ai
-export { getModel } from "@earendil-works/pi-ai";
+// Re-export useful runtime functions from pi-ai's compatibility entrypoint.
+export { getModel } from "@earendil-works/pi-ai/compat";
 // ---- DO class factory (for advanced use) ----
 export { createAgentSessionDOClass } from "./agent-session-do.ts";
 // ---- Session storage ----
@@ -53,6 +49,12 @@ export {
 	loadMessages,
 	saveMessages,
 } from "./session-persistence.ts";
+export type {
+	SessionMetadata,
+	SessionTreeEntry,
+	SessionTreeStorage as SessionStorage,
+} from "./session-tree.ts";
+export { SessionTree as Session } from "./session-tree.ts";
 // ---- Types / DI interfaces ----
 export type {
 	AgentEnv,

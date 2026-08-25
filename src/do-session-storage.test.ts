@@ -1,6 +1,9 @@
-import { Session, type SessionTreeEntry } from "@earendil-works/pi-agent-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DOSessionStorage } from "./do-session-storage.ts";
+import {
+	SessionTree as Session,
+	type SessionTreeEntry,
+} from "./session-tree.ts";
 import { MockDurableObjectStorage } from "./test-utils.ts";
 
 function castStorage(mock: MockDurableObjectStorage): DurableObjectStorage {

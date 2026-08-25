@@ -12,12 +12,12 @@
  *   "session:idx"        → string[] (ordered entry IDs for list/find)
  */
 
+import { uuidv7 } from "@earendil-works/pi-ai";
 import type {
 	SessionMetadata,
-	SessionStorage,
 	SessionTreeEntry,
-} from "@earendil-works/pi-agent-core";
-import { uuidv7 } from "@earendil-works/pi-agent-core";
+	SessionTreeStorage,
+} from "./session-tree.ts";
 
 const KEY_META = "session:meta";
 const KEY_LEAF = "session:leaf";
@@ -32,7 +32,7 @@ const LABEL_PREFIX = "session:label:";
  * with an ordered index for iteration. Labels are stored
  * separately for efficient lookup.
  */
-export class DOSessionStorage implements SessionStorage<SessionMetadata> {
+export class DOSessionStorage implements SessionTreeStorage {
 	private readonly storage: DurableObjectStorage;
 	private readonly metadata: SessionMetadata;
 

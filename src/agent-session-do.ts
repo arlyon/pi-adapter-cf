@@ -13,14 +13,17 @@ import type {
 	AgentEvent,
 	AgentMessage,
 	AgentTool,
-	SessionTreeEntry,
 } from "@earendil-works/pi-agent-core";
-import { Agent, Session } from "@earendil-works/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai";
+import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
 import { DOSessionStorage } from "./do-session-storage.ts";
 import type { ClientMessage, ServerMessage } from "./protocol.ts";
 import { parseClientMessage, serializeServerMessage } from "./protocol.ts";
+import {
+	SessionTree as Session,
+	type SessionTreeEntry,
+} from "./session-tree.ts";
 import type {
 	AgentEnv,
 	AgentWorkerConfig,
@@ -144,7 +147,7 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 						? { thinkingLevel: config.thinkingLevel }
 						: {}),
 				},
-				streamFn: config.streamFn,
+				streamFn: config.streamFn ?? streamSimple,
 				transformContext: config.transformContext,
 				convertToLlm: config.convertToLlm,
 				getApiKey: (provider: string) => config.getApiKey(provider, env),
@@ -159,6 +162,13 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 			const env = this._env;
 			const sessionCtx = ctx ?? this._sessionContext;
 			this._agent = new Agent(this._buildAgentOptions(sessionCtx, messages));
+			this._subscribeAgentEvents(env, sessionCtx);
+			return this._agent;
+		}
+
+		/** @internal */
+		_subscribeAgentEvents(env: Env, sessionCtx: Ctx | undefined): void {
+			if (!this._agent) return;
 
 			// Subscribe to events and broadcast to all connected WS clients
 			this._unsubscribe = this._agent.subscribe((event) => {
@@ -255,8 +265,6 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 					}
 				}
 			});
-
-			return this._agent;
 		}
 
 		/** @internal */
@@ -282,9 +290,10 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 				this._unsubscribe = null;
 			}
 			if (this._agent) {
-				this._agent.abort();
-				this._agent.reset();
+				const agent = this._agent;
 				this._agent = null;
+				agent.abort();
+				if (!agent.state.isStreaming) agent.reset();
 			}
 		}
 
@@ -550,7 +559,13 @@ export function createAgentSessionDOClass<Env extends AgentEnv, Ctx = void>(
 			reason: string,
 			_wasClean: boolean,
 		): Promise<void> {
-			ws.close(code, reason);
+			try {
+				ws.close(code, reason);
+			} catch {
+				try {
+					ws.close();
+				} catch {}
+			}
 			// If no more sockets, schedule idle cleanup
 			if (this._ctx.getWebSockets().length === 0) {
 				this._scheduleIdleAlarm();

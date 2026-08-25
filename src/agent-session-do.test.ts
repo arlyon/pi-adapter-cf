@@ -328,7 +328,7 @@ describe("AgentSessionDO.webSocketMessage", () => {
 		const ws = new MockWebSocket();
 		await instance.webSocketMessage(
 			ws as unknown as WebSocket,
-			JSON.stringify({ type: "set_thinking_level", level: "high" }),
+			JSON.stringify({ type: "set_thinking_level", level: "max" }),
 		);
 		// Verify by getting state
 		await instance.webSocketMessage(
@@ -337,7 +337,7 @@ describe("AgentSessionDO.webSocketMessage", () => {
 		);
 		const msgs = parseSent(ws);
 		const stateMsg = msgs.find((m) => m.type === "state");
-		expect(stateMsg.state.thinkingLevel).toBe("high");
+		expect(stateMsg.state.thinkingLevel).toBe("max");
 	});
 
 	it("clear_messages resets messages and session tree", async () => {
