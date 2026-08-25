@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/arlyon/pi-adapter-cf/compare/pi-adapter-cf-v0.1.3...pi-adapter-cf-v0.1.4) (2026-08-25)
+
+
+### Bug Fixes
+
+* support Pi 0.84 sessions ([40cef05](https://github.com/arlyon/pi-adapter-cf/commit/40cef05e84edca76e3a349e30fcac4b1db70eea7))
+
 ## [0.1.3](https://github.com/arlyon/pi-adapter-cf/compare/pi-adapter-cf-v0.1.2...pi-adapter-cf-v0.1.3) (2026-07-17)
 
 
